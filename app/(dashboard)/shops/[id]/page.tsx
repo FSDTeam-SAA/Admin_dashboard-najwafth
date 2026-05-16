@@ -1,96 +1,82 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   AdminBackHeader,
   AdminMetricCard,
   AdminSectionCard,
-  AssignDriverModal,
   RequestCard,
   SegmentedTabs,
 } from "@/components/admin/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAdminOverview, getDriverRequests, getShopById } from "@/lib/api";
+import { getOrders, getShopById } from "@/lib/api";
 
 type ShopData = {
   _id: string;
   name?: string;
   address?: string;
+  totalOrders?: number;
   owner?: {
     _id?: string;
-    phone?: string;
-  };
-};
-
-type DriverRequestRow = {
-  _id: string;
-  shopName?: string;
-  phone?: string;
-  customerName?: string;
-  location?: string;
-  item?: string;
-  orderDate?: string;
-  createdAt?: string;
-  totalAmount?: number;
-  price?: number;
-  status?: string;
-  orderId?: {
-    orderId?: string;
-    _id?: string;
-  };
-};
-
-type AdminOverview = {
-  recentDrivers: {
-    _id: string;
     name?: string;
     phone?: string;
+  };
+};
+
+type OrderRow = {
+  _id: string;
+  createdAt?: string;
+  totalAmount?: number;
+  status?: string;
+  orderId?: string;
+  address?: string;
+  customer?: {
+    name?: string;
+    phone?: string;
+  };
+  items?: {
+    quantity?: number;
+    product?: {
+      title?: string;
+    };
   }[];
 };
 
 export default function ShopDetailsPage() {
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("all");
-  const [openAssign, setOpenAssign] = useState(false);
 
   const shopQuery = useQuery({
     queryKey: ["admin-shop", params.id],
     queryFn: () => getShopById(params.id),
     enabled: Boolean(params.id),
   });
-  const requestsQuery = useQuery({
-    queryKey: ["admin-driver-requests", "shop-detail"],
-    queryFn: () => getDriverRequests({ page: 1, limit: 100 }),
-  });
-  const overviewQuery = useQuery({
-    queryKey: ["admin-overview"],
-    queryFn: getAdminOverview,
-  });
-
   const shop = shopQuery.data as ShopData | undefined;
-  const requestsData = (requestsQuery.data as { requests: DriverRequestRow[] } | undefined)?.requests;
-  const requests = requestsData || [];
-  const overview = overviewQuery.data as AdminOverview | undefined;
+  const vendorId = shop?.owner?._id || shop?._id;
 
-  const filteredRequests = (() => {
-    const scoped = requests.filter((request) => {
-      if (!shop) {
-        return true;
-      }
+  const ordersQuery = useQuery({
+    queryKey: ["admin-shop-orders", vendorId],
+    queryFn: () => getOrders({ page: 1, limit: 100, vendorId }),
+    enabled: Boolean(vendorId),
+  });
 
-      return request.shopName === shop.name;
-    });
+  const orders = ((ordersQuery.data as { orders: OrderRow[] } | undefined)?.orders || []) as OrderRow[];
 
+  const filteredOrders = useMemo(() => {
     if (tab === "all") {
-      return scoped;
+      return orders;
     }
 
-    return scoped.filter((request) => (request.status || "pending").toLowerCase() === tab);
-  })();
+    if (tab === "completed") {
+      return orders.filter((order) => order.status === "delivered");
+    }
 
-  if (shopQuery.isLoading) {
+    return orders.filter((order) => order.status === tab);
+  }, [orders, tab]);
+
+  if (shopQuery.isLoading || ordersQuery.isLoading) {
     return (
       <section className="bg-white px-6 py-7 md:px-8">
         <Skeleton className="h-[52px] w-[320px] rounded-[12px]" />
@@ -112,10 +98,10 @@ export default function ShopDetailsPage() {
             <p>{shop?.owner?.phone || "+880 1812-111222"}</p>
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <AdminMetricCard label="Total Orders" value={145} accent="blue" note="" />
+            <AdminMetricCard label="Total Orders" value={shop?.totalOrders || 0} accent="blue" note="" />
             <AdminMetricCard
               label="Pending"
-              value={requests.filter((request) => request.status === "pending").length}
+              value={orders.filter((order) => order.status === "pending").length}
               accent="cream"
               note=""
             />
@@ -133,7 +119,7 @@ export default function ShopDetailsPage() {
           items={[
             { label: "All", value: "all" },
             { label: "Pending", value: "pending" },
-            { label: "Completed", value: "accepted" },
+            { label: "Completed", value: "completed" },
           ]}
           value={tab}
           onChange={setTab}
@@ -141,31 +127,34 @@ export default function ShopDetailsPage() {
       </div>
 
       <div className="mt-6 space-y-5">
-        {filteredRequests.map((request) => (
+        {filteredOrders.map((order) => (
           <RequestCard
-            key={request._id}
+            key={order._id}
             request={{
-              ...request,
-              orderId: request.orderId?.orderId || request.orderId?._id || request._id,
+              _id: order._id,
+              orderId: order.orderId || order._id,
+              createdAt: order.createdAt,
+              totalAmount: order.totalAmount,
+              status: order.status,
+              customerName: order.customer?.name || "Customer",
+              customerPhone: order.customer?.phone || "",
+              customerLocation: order.address || "",
+              shopName: shop?.name || "Books store",
+              shopPhone: shop?.owner?.phone || "",
+              shopLocation: shop?.address || "",
+              item:
+                order.items && order.items.length > 0
+                  ? `${order.items.reduce((sum, item) => sum + (item.quantity || 0), 0)} Books`
+                  : "0 Books",
             }}
-            actionLabel="Assign Driver"
-            onAction={() => setOpenAssign(true)}
           />
         ))}
+        {filteredOrders.length === 0 ? (
+          <div className="rounded-[18px] border border-[#d2dce7] bg-[#f8fbff] px-6 py-10 text-center text-[15px] text-[#667085]">
+            No orders found for this store.
+          </div>
+        ) : null}
       </div>
-
-      <AssignDriverModal
-        open={openAssign}
-        title="Assign Driver to Order #OI027"
-        drivers={
-          (overview?.recentDrivers || []).map((driver, index) => ({
-            ...driver,
-            status: index % 3 === 1 ? "busy" : "available",
-            currentOrders: index % 3 === 1 ? 2 : 0,
-          })) || []
-        }
-        onClose={() => setOpenAssign(false)}
-      />
     </section>
   );
 }

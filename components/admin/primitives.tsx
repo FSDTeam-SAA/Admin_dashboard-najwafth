@@ -36,7 +36,11 @@ export type OrderRequestRow = {
   customerName?: string;
   shopName?: string;
   phone?: string;
+  shopPhone?: string;
+  customerPhone?: string;
   location?: string;
+  shopLocation?: string;
+  customerLocation?: string;
   orderDate?: string;
   createdAt?: string;
   totalAmount?: number;
@@ -355,8 +359,8 @@ export function RequestCard({
           <div className="space-y-3 text-[14px] text-[#6b7280]">
             <p className="flex items-center gap-2"><Clock3 className="size-4" /> Date <span className="font-medium text-[#202124]">{formatDate(request.orderDate || request.createdAt)}</span></p>
             <p className="flex items-center gap-2"><UserRound className="size-4" /> Books Store Name: <span className="font-medium text-[#202124]">{request.shopName || "ABC Book House"}</span></p>
-            <p className="flex items-center gap-2"><Phone className="size-4" /> Phone Number: <span className="font-medium text-[#202124]">{request.phone || "555-0102"}</span></p>
-            <p className="flex items-center gap-2"><MapPin className="size-4" /> Delivery Address <span className="font-medium text-[#202124]">{request.location || "456 Oak Ave, Townsburg"}</span></p>
+            <p className="flex items-center gap-2"><Phone className="size-4" /> Phone Number: <span className="font-medium text-[#202124]">{request.shopPhone || request.phone || "555-0102"}</span></p>
+            <p className="flex items-center gap-2"><MapPin className="size-4" /> Delivery Address <span className="font-medium text-[#202124]">{request.shopLocation || request.location || "456 Oak Ave, Townsburg"}</span></p>
           </div>
         </div>
 
@@ -367,8 +371,8 @@ export function RequestCard({
           </p>
           <div className="space-y-3 text-[14px] text-[#6b7280]">
             <p className="flex items-center gap-2"><UserRound className="size-4" /> Name: <span className="font-medium text-[#202124]">{request.customerName || "Bob Smith"}</span></p>
-            <p className="flex items-center gap-2"><Phone className="size-4" /> Phone Number: <span className="font-medium text-[#202124]">{request.phone || "555-0102"}</span></p>
-            <p className="flex items-center gap-2"><MapPin className="size-4" /> Delivery Address <span className="font-medium text-[#202124]">{request.location || "456 Oak Ave, Townsburg"}</span></p>
+            <p className="flex items-center gap-2"><Phone className="size-4" /> Phone Number: <span className="font-medium text-[#202124]">{request.customerPhone || request.phone || "555-0102"}</span></p>
+            <p className="flex items-center gap-2"><MapPin className="size-4" /> Delivery Address <span className="font-medium text-[#202124]">{request.customerLocation || request.location || "456 Oak Ave, Townsburg"}</span></p>
             <p className="flex items-center gap-2"><Package2 className="size-4" /> Order Items <span className="font-medium text-[#202124]">{request.item || "4 Books"}</span></p>
             <p className="flex items-center gap-2"><Clock3 className="size-4" /> Price <span className="font-medium text-[#202124]">{formatCurrency(request.totalAmount || request.price || 12)}</span></p>
             <p className="flex items-center gap-2"><Package2 className="size-4" /> Order Id <span className="font-medium text-[#202124]">{request.orderId || "xxxxxxx"}</span></p>

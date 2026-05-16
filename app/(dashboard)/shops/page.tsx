@@ -5,14 +5,16 @@ import { useQuery } from "@tanstack/react-query";
 import { AdminMetricCard, AdminPageFrame, ShopCard } from "@/components/admin/primitives";
 import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAdminOverview, getDriverRequests, getShops } from "@/lib/api";
+import { getAdminOverview, getOrders, getShops } from "@/lib/api";
 
 type ShopRow = {
   _id: string;
   name?: string;
   address?: string;
   shopStatus?: string;
+  totalOrders?: number;
   owner?: {
+    _id?: string;
     name?: string;
     phone?: string;
   };
@@ -26,12 +28,11 @@ type ShopsResponse = {
   };
 };
 
-type DriverRequestsResponse = {
-  requests: {
-    _id: string;
-    shopName?: string;
-    status?: string;
-  }[];
+type OrderRow = {
+  _id: string;
+  status?: string;
+  vendorId?: string;
+  vendor?: { _id?: string };
 };
 
 type AdminOverview = {
@@ -69,20 +70,23 @@ export default function AdminShopsPage() {
     queryKey: ["admin-overview"],
     queryFn: getAdminOverview,
   });
-  const requestsQuery = useQuery({
-    queryKey: ["admin-driver-requests", 1, "shops"],
-    queryFn: () => getDriverRequests({ page: 1, limit: 100 }),
+  const pendingOrdersQuery = useQuery({
+    queryKey: ["admin-pending-orders"],
+    queryFn: () => getOrders({ page: 1, limit: 1000, status: "pending" }),
   });
 
   const shops = shopsQuery.data as ShopsResponse | undefined;
   const overview = overviewQuery.data as AdminOverview | undefined;
-  const requests = requestsQuery.data as DriverRequestsResponse | undefined;
+  const pendingOrders = ((pendingOrdersQuery.data as { orders: OrderRow[] } | undefined)?.orders || []) as OrderRow[];
 
   const cards = useMemo(
     () =>
       (shops?.shops || []).map((shop) => {
-        const pending = (requests?.requests || []).filter(
-          (request) => request.status === "pending" && request.shopName === shop.name,
+        const vendorId = shop.owner?._id || shop._id;
+        const pending = pendingOrders.filter(
+          (order) =>
+            order.status === "pending" &&
+            (order.vendorId === vendorId || order.vendor?._id === vendorId),
         ).length;
 
         return {
@@ -90,11 +94,11 @@ export default function AdminShopsPage() {
           title: shop.name || "ABC Book House",
           address: shop.address || "23 Mirpur Road, Dhaka 1216",
           phone: shop.owner?.phone || "+880 1812-111222",
-          totalOrders: 145,
+          totalOrders: shop.totalOrders || 0,
           pending,
         };
       }),
-    [requests?.requests, shops?.shops],
+    [pendingOrders, shops?.shops],
   );
 
   if (shopsQuery.isLoading) {

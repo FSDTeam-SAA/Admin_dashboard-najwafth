@@ -45,7 +45,7 @@ export async function updateShopStatus(shopId: string, status: "verified" | "not
   return response.data.data;
 }
 
-export async function getOrders(params: { page: number; limit: number; status?: string }) {
+export async function getOrders(params: { page: number; limit: number; status?: string; vendorId?: string }) {
   const response = await apiClient.get("/order", { params });
   const payload = response.data.data || {};
   const orders = Array.isArray(payload) ? payload : payload.orders || [];
