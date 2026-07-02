@@ -103,9 +103,9 @@ export function AdminShellHeader() {
   const profileImage = getAssetUrl(profile?.avatar || profile?.image || profile?.profileImage);
 
   return (
-    <header className="flex flex-col gap-4 bg-[#fcf1e2] px-6 py-6 md:flex-row items-center justify-end md:px-8">
-      <div className="flex items-center justify-end gap-3">
-        <div className="relative size-10 overflow-hidden rounded-full bg-[#7d5f4a]">
+    <header className="flex items-center justify-end bg-[#fcf1e2] px-4 py-4 pl-16 lg:px-8 lg:pl-8">
+      <div className="flex items-center gap-3">
+        <div className="relative size-9 overflow-hidden rounded-full bg-[#7d5f4a] lg:size-10">
           {profileImage ? (
             <Image src={profileImage} alt={profileName} fill sizes="40px" className="object-cover" />
           ) : (
@@ -114,7 +114,7 @@ export function AdminShellHeader() {
             </div>
           )}
         </div>
-        <p className="text-[16px] font-medium text-[#2b2b2b]">{profileName}</p>
+        <p className="text-[15px] font-medium text-[#2b2b2b] lg:text-[16px]">{profileName}</p>
       </div>
     </header>
   );
@@ -130,10 +130,10 @@ export function AdminPageFrame({
   children: React.ReactNode;
 }) {
   return (
-    <section className="min-h-[calc(100vh-120px)] rounded-none bg-white px-6 py-7 md:px-8">
-      <div className="mb-8">
-        <h1 className="text-[32px] font-semibold leading-[120%] text-[#202124]">{title}</h1>
-        <p className="mt-2 text-[16px] font-medium leading-[120%] text-[#313131]">{subtitle}</p>
+    <section className="min-h-full rounded-none bg-white px-4 py-6 sm:px-6 md:px-8">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-[22px] font-semibold leading-[120%] text-[#202124] sm:text-[28px] lg:text-[32px]">{title}</h1>
+        <p className="mt-1 text-[14px] font-medium leading-[120%] text-[#313131] sm:mt-2 sm:text-[16px]">{subtitle}</p>
       </div>
       {children}
     </section>
@@ -150,13 +150,13 @@ export function AdminBackHeader({
   subtitle: string;
 }) {
   return (
-    <div className="mb-7 flex items-start gap-3">
+    <div className="mb-7 flex items-start gap-2 sm:gap-3">
       <Link href={href} className="mt-1 text-[#111111]">
-        <ChevronLeft className="size-8" />
+        <ChevronLeft className="size-6 sm:size-8" />
       </Link>
       <div>
-        <h1 className="text-[32px] font-semibold leading-[120%] text-[#202124]">{title}</h1>
-        <p className="mt-2 text-[16px] leading-[120%] text-[#313131]">{subtitle}</p>
+        <h1 className="text-[24px] font-semibold leading-[120%] text-[#202124] sm:text-[32px]">{title}</h1>
+        <p className="mt-1 text-[14px] leading-[120%] text-[#313131] sm:mt-2 sm:text-[16px]">{subtitle}</p>
       </div>
     </div>
   );
@@ -168,9 +168,7 @@ export function AdminMetricCard({ label, value, accent = "blue", note }: AdminMe
       <p className="text-[16px] font-semibold text-[#212121]">{label}</p>
       <div className="mt-5 flex min-h-[64px] flex-col justify-between gap-4">
         <p className="text-[16px] font-medium">{value}</p>
-        {note === "" ? null : (
-          <p className="text-right text-[13.6px] font-bold leading-6 tracking-normal">{note || "+2,123 today"}</p>
-        )}
+        
       </div>
     </Card>
   );
@@ -205,12 +203,12 @@ export function SegmentedTabs({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="inline-flex rounded-[12px] bg-[#e9eef4] p-1">
+    <div className="flex w-full overflow-x-auto rounded-[12px] bg-[#e9eef4] p-1 sm:inline-flex sm:w-auto">
       {items.map((item) => (
         <button
           key={item.value}
           className={cn(
-            "rounded-[9px] px-6 py-2 text-[16px] font-medium text-[#1f1f1f] transition",
+            "flex-1 whitespace-nowrap rounded-[9px] px-4 py-2 text-[14px] font-medium text-[#1f1f1f] transition sm:flex-none sm:px-6 sm:text-[16px]",
             value === item.value ? "bg-[#6d98c0] text-white" : "bg-transparent",
           )}
           onClick={() => onChange(item.value)}
@@ -464,8 +462,8 @@ export function AssignDriverModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
-      <div className="max-h-[90vh] w-full max-w-[820px] overflow-hidden rounded-[16px] bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-[820px] overflow-hidden rounded-[16px] bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-5">
           <div>
             <h2 className="text-[18px] font-semibold text-[#202124]">{title}</h2>

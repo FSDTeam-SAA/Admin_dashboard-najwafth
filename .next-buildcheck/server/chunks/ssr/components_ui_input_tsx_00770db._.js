@@ -1,3 +1,0 @@
-module.exports=[5522,a=>{"use strict";var b=a.i(87924),c=a.i(72131),d=a.i(97895);let e=c.forwardRef(({className:a,...c},e)=>(0,b.jsx)("input",{ref:e,className:(0,d.cn)("flex h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-[#103670] focus:outline-none focus:ring-4 focus:ring-[#103670]/10",a),...c}));e.displayName="Input",a.s(["Input",0,e])}];
-
-//# sourceMappingURL=components_ui_input_tsx_00770db._.js.map
