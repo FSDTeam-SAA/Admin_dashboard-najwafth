@@ -61,7 +61,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               className={cn(
                 "flex items-center gap-3 rounded-[10px] px-4 py-3 text-[15px] font-medium transition",
                 isActive
-                  ? "bg-[#6d98c0] text-white [&_svg]:text-white"
+                  ? "bg-[#6d98c0] text-white [&_span]:text-white [&_svg]:text-white"
                   : "text-[#252525] hover:bg-white/60",
               )}
               onClick={onClose}
@@ -86,12 +86,6 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
 export function AdminSidebar() {
   const [isOpen, setIsOpen] = useState(false);
-  const pathname = usePathname();
-
-  // Close drawer on route change
-  useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
 
   // Lock body scroll while drawer is open
   useEffect(() => {
