@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AdminMetricCard, AdminPageFrame, StatusPill } from "@/components/admin/primitives";
 import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getOrders } from "@/lib/api";
+import { getAdminProfitOverview } from "@/lib/api";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 type OrderRow = {
@@ -15,6 +15,8 @@ type OrderRow = {
   totalAmount: number;
   status: string;
   createdAt: string;
+  adminCommission?: number;
+  adminCommissionRate?: number;
   vendor?: {
     name?: string;
     phone?: string;
@@ -22,8 +24,16 @@ type OrderRow = {
 };
 
 type OrdersResponse = {
+  metrics?: {
+    totalOrders: number;
+    totalOrderAmount: number;
+    totalCommission: number;
+    adminTotalProfit: number;
+    adminCommissionRate: number;
+  };
   orders: OrderRow[];
   pagination: {
+    total: number;
     totalPages: number;
     page: number;
   };
@@ -33,18 +43,18 @@ export default function ProfitOverviewPage() {
   const [page, setPage] = useState(1);
   const ordersQuery = useQuery({
     queryKey: ["profit-overview-orders", page],
-    queryFn: () => getOrders({ page, limit: 6 }),
+    queryFn: () => getAdminProfitOverview({ page, limit: 6 }),
   });
 
   const orders = ordersQuery.data as OrdersResponse | undefined;
   const rowsData = orders?.orders;
   const rows = rowsData || [];
-  const totalCommission = rows.reduce((sum, row) => sum + row.totalAmount * 0.15, 0);
-  const adminProfit = Number((totalCommission * 0.166).toFixed(2));
+  const metrics = orders?.metrics;
+  const commissionRate = metrics?.adminCommissionRate ?? 15;
 
   if (ordersQuery.isLoading) {
     return (
-      <AdminPageFrame title="Profit Overview" subtitle="Analysis your Profit Overview">
+      <AdminPageFrame title="Profit Overview" subtitle="Analyze your Profit Overview">
         <div className="grid gap-4 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, index) => (
             <Skeleton key={index} className="h-[108px] rounded-[14px]" />
@@ -56,11 +66,11 @@ export default function ProfitOverviewPage() {
   }
 
   return (
-    <AdminPageFrame title="Profit Overview" subtitle="Analysis your Profit Overview">
+    <AdminPageFrame title="Profit Overview" subtitle="Analyze your Profit Overview">
       <div className="grid gap-4 lg:grid-cols-3">
-        <AdminMetricCard label="Total Orders" value={rows.length} accent="green" note="2 today" />
-        <AdminMetricCard label="Total Commission" value={formatCurrency(totalCommission)} accent="blue" />
-        <AdminMetricCard label="Admin Total Profit" value={formatCurrency(adminProfit)} accent="cream" />
+        <AdminMetricCard label="Total Orders" value={metrics?.totalOrders ?? 0} accent="green" />
+        <AdminMetricCard label="Total Sales" value={formatCurrency(metrics?.totalOrderAmount ?? 0)} accent="blue" />
+        <AdminMetricCard label="Admin Total Profit" value={formatCurrency(metrics?.adminTotalProfit ?? 0)} accent="cream" />
       </div>
 
       <div className="mt-6 overflow-hidden rounded-[14px] border border-[#d6d6d6] bg-white">
@@ -85,13 +95,16 @@ export default function ProfitOverviewPage() {
                   <td className="border-b border-[#ececec] px-4 py-6">{order.vendor?.name || "ABC Store"}</td>
                   <td className="border-b border-[#ececec] px-4 py-6">{order.vendor?.phone || "(207) 555-0119"}</td>
                   <td className="border-b border-[#ececec] px-4 py-6">{formatCurrency(order.totalAmount)}</td>
-                  <td className="border-b border-[#ececec] px-4 py-6">15%</td>
+                  <td className="border-b border-[#ececec] px-4 py-6">
+                    <div>{commissionRate}%</div>
+                    <div className="mt-1 text-[13px] text-[#7d7d7d]">{formatCurrency(order.adminCommission ?? order.totalAmount * (commissionRate / 100))}</div>
+                  </td>
                   <td className="border-b border-[#ececec] px-4 py-6">
                     <div>{formatDate(order.createdAt)}</div>
                     <div className="mt-1 text-[13px] text-[#7d7d7d]">09:29 AM</div>
                   </td>
                   <td className="border-b border-[#ececec] px-4 py-6">
-                    <StatusPill status={order.status === "pending" ? "pending" : "delivered"} />
+                    <StatusPill status={order.status} />
                   </td>
                   <td className="border-b border-[#ececec] px-4 py-6 text-right text-[#f04438]">
                     <Trash2 className="ml-auto size-4" />
@@ -102,7 +115,11 @@ export default function ProfitOverviewPage() {
           </table>
         </div>
         <div className="flex flex-col gap-4 border-t border-[#ececec] px-4 py-5 md:flex-row md:items-center md:justify-between">
-          <p className="text-[16px] text-[#666]">Showing 1 to {rows.length} of 20 results</p>
+          <p className="text-[16px] text-[#666]">
+            {rows.length > 0
+              ? `Showing ${(page - 1) * 6 + 1} to ${(page - 1) * 6 + rows.length} of ${orders?.pagination.total || rows.length} results`
+              : "Showing 0 results"}
+          </p>
           <Pagination page={page} totalPages={orders?.pagination.totalPages || 1} onPageChange={setPage} />
         </div>
       </div>

@@ -5,6 +5,21 @@ export async function getAdminOverview() {
   return response.data.data;
 }
 
+export async function getAdminProfitOverview(params: { page: number; limit: number }) {
+  const response = await apiClient.get("/dashboard/admin/profit-overview", { params });
+  return response.data.data;
+}
+
+export async function getAdminSettings() {
+  const response = await apiClient.get("/admin-settings");
+  return response.data.data;
+}
+
+export async function updateAdminSettings(payload: { adminCommissionRate?: number; deliveryFee?: number }) {
+  const response = await apiClient.patch("/admin-settings", payload);
+  return response.data.data;
+}
+
 export async function loginAdmin(payload: { email: string; password: string }) {
   const response = await apiClient.post("/auth/login", payload);
   return response.data.data;

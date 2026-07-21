@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff } from "lucide-react";
+import { DollarSign, Eye, EyeOff, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { AdminPageFrame, AdminSectionCard, ProfileHero } from "@/components/admin/primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { changePassword, getProfile, updateProfile } from "@/lib/api";
+import { changePassword, getAdminSettings, getProfile, updateAdminSettings, updateProfile } from "@/lib/api";
+import { formatCurrency } from "@/lib/utils";
 
 type ProfileData = {
   name?: string;
@@ -18,6 +19,11 @@ type ProfileData = {
   image?: string;
   profileImage?: string;
   avatar?: string;
+};
+
+type AdminSettingsData = {
+  adminCommissionRate?: number;
+  deliveryFee?: number;
 };
 
 function splitName(name?: string) {
@@ -32,6 +38,10 @@ function splitName(name?: string) {
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<"personal" | "password">("personal");
+  const [openCommissionModal, setOpenCommissionModal] = useState(false);
+  const [openDeliveryModal, setOpenDeliveryModal] = useState(false);
+  const [commissionRate, setCommissionRate] = useState("15");
+  const [deliveryFee, setDeliveryFee] = useState("5");
   const [showPasswords, setShowPasswords] = useState({
     currentPassword: false,
     newPassword: false,
@@ -46,6 +56,15 @@ export default function SettingsPage() {
   const profile = profileQuery.data as ProfileData | undefined;
   const names = useMemo(() => splitName(profile?.name), [profile?.name]);
 
+  const settingsQuery = useQuery({
+    queryKey: ["admin-settings"],
+    queryFn: getAdminSettings,
+  });
+
+  const adminSettings = settingsQuery.data as AdminSettingsData | undefined;
+  const currentCommissionRate = Number(adminSettings?.adminCommissionRate ?? 15);
+  const currentDeliveryFee = Number(adminSettings?.deliveryFee ?? 5);
+
   const updateMutation = useMutation({
     mutationFn: updateProfile,
     onSuccess: () => {
@@ -58,6 +77,25 @@ export default function SettingsPage() {
     mutationFn: changePassword,
     onSuccess: () => {
       toast.success("Password changed successfully.");
+    },
+  });
+
+  const commissionMutation = useMutation({
+    mutationFn: updateAdminSettings,
+    onSuccess: () => {
+      toast.success("Admin commission updated successfully.");
+      queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["profit-overview-orders"] });
+      setOpenCommissionModal(false);
+    },
+  });
+
+  const deliveryFeeMutation = useMutation({
+    mutationFn: updateAdminSettings,
+    onSuccess: () => {
+      toast.success("Shipping delivery fee updated successfully.");
+      queryClient.invalidateQueries({ queryKey: ["admin-settings"] });
+      setOpenDeliveryModal(false);
     },
   });
 
@@ -84,7 +122,7 @@ export default function SettingsPage() {
 
   return (
     <AdminPageFrame title="Setting" subtitle="Mange your Profile Information">
-      <div className="grid gap-5 md:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-4">
         <button
           className={`h-[62px] rounded-[10px] border text-[24px] font-medium ${
             tab === "personal" ? "bg-[#6d98c0] text-white border-[#6d98c0]" : "border-[#3d8ef5] bg-white text-[#4090f7]"
@@ -102,6 +140,27 @@ export default function SettingsPage() {
           type="button"
         >
           Change Password
+        </button>
+        <button
+          className="h-[62px] rounded-[10px] border border-[#3d8ef5] bg-white text-[24px] font-medium text-[#4090f7]"
+          onClick={() => {
+            setCommissionRate(String(currentCommissionRate));
+            setOpenCommissionModal(true);
+          }}
+          type="button"
+        >
+          Admin Commission
+        </button>
+        <button
+          className="flex h-[62px] items-center justify-center gap-2 rounded-[10px] border border-[#3d8ef5] bg-white text-[24px] font-medium text-[#4090f7]"
+          onClick={() => {
+            setDeliveryFee(String(currentDeliveryFee));
+            setOpenDeliveryModal(true);
+          }}
+          type="button"
+        >
+          <Truck className="size-5" />
+          Shipping Delivery
         </button>
       </div>
 
@@ -239,6 +298,111 @@ export default function SettingsPage() {
           </form>
         </AdminSectionCard>
       )}
+
+      {openCommissionModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setOpenCommissionModal(false)}>
+          <div className="w-full max-w-[520px] rounded-[16px] bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-[24px] font-semibold text-[#202124]">Admin Commission</h2>
+                <p className="mt-1 text-[14px] text-[#667085]">Current commission: {currentCommissionRate}%</p>
+              </div>
+              <button className="text-[#667085]" onClick={() => setOpenCommissionModal(false)} type="button">
+                <X className="size-5" />
+              </button>
+            </div>
+            <form
+              className="space-y-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const parsedRate = Number(commissionRate);
+                if (!Number.isFinite(parsedRate) || parsedRate < 0 || parsedRate > 100) {
+                  toast.error("Enter a commission between 0 and 100.");
+                  return;
+                }
+                commissionMutation.mutate({ adminCommissionRate: parsedRate });
+              }}
+            >
+              <div>
+                <label className="mb-3 block text-[16px] font-medium text-[#202124]">Commission Percentage</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#667085]" />
+                  <Input
+                    className="h-[54px] rounded-[10px] border-[#cfd4dc] pl-12 pr-12"
+                    max="100"
+                    min="0"
+                    onChange={(event) => setCommissionRate(event.target.value)}
+                    step="0.01"
+                    type="number"
+                    value={commissionRate}
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[16px] font-semibold text-[#667085]">%</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button className="h-[44px] rounded-[10px]" onClick={() => setOpenCommissionModal(false)} type="button" variant="secondary">
+                  Cancel
+                </Button>
+                <Button className="h-[44px] rounded-[10px] bg-[#6d98c0] px-6 hover:bg-[#5f88ae]" disabled={commissionMutation.isPending} type="submit">
+                  {commissionMutation.isPending ? "Saving..." : "Update Commission"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {openDeliveryModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setOpenDeliveryModal(false)}>
+          <div className="w-full max-w-[520px] rounded-[16px] bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex items-start justify-between">
+              <div>
+                <h2 className="text-[24px] font-semibold text-[#202124]">Shipping Delivery</h2>
+                <p className="mt-1 text-[14px] text-[#667085]">Current delivery fee: {formatCurrency(currentDeliveryFee)}</p>
+              </div>
+              <button className="text-[#667085]" onClick={() => setOpenDeliveryModal(false)} type="button">
+                <X className="size-5" />
+              </button>
+            </div>
+            <form
+              className="space-y-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const parsedFee = Number(deliveryFee);
+                if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+                  toast.error("Enter a valid delivery fee.");
+                  return;
+                }
+                deliveryFeeMutation.mutate({ deliveryFee: parsedFee });
+              }}
+            >
+              <div>
+                <label className="mb-3 block text-[16px] font-medium text-[#202124]">Delivery Fee</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#667085]" />
+                  <Input
+                    className="h-[54px] rounded-[10px] border-[#cfd4dc] pl-12"
+                    min="0"
+                    onChange={(event) => setDeliveryFee(event.target.value)}
+                    placeholder="0.00"
+                    step="0.01"
+                    type="number"
+                    value={deliveryFee}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button className="h-[44px] rounded-[10px]" onClick={() => setOpenDeliveryModal(false)} type="button" variant="secondary">
+                  Cancel
+                </Button>
+                <Button className="h-[44px] rounded-[10px] bg-[#6d98c0] px-6 hover:bg-[#5f88ae]" disabled={deliveryFeeMutation.isPending} type="submit">
+                  {deliveryFeeMutation.isPending ? "Saving..." : "Update Fee"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </AdminPageFrame>
   );
 }

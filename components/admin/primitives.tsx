@@ -74,6 +74,8 @@ const statusStyles = {
   pending: "bg-[#ffefad] text-[#c48b00]",
   accepted: "bg-[#c9e7d3] text-[#16934b]",
   delivered: "bg-[#c9e7d3] text-[#16934b]",
+  processing: "bg-[#d8e9ff] text-[#3d8ef5]",
+  picked: "bg-[#ddeafe] text-[#2f80ed]",
   completed: "bg-[#c9e7d3] text-[#16934b]",
   available: "bg-transparent text-[#16a34a]",
   busy: "bg-transparent text-[#f97316]",
