@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AdminMetricCard,
@@ -10,8 +10,9 @@ import {
   SegmentedTabs,
   type DriverRow,
 } from "@/components/admin/primitives";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
-import { assignDriverToRequest, getAdminOverview, getDriverRequests, getDrivers } from "@/lib/api";
+import { assignDriverToRequest, getDriverRequests, getDrivers } from "@/lib/api";
 import { toast } from "sonner";
 
 type DriverRequestRow = {
@@ -38,27 +39,31 @@ type DriverRequestRow = {
 
 type DriverRequestsResponse = {
   total: number;
+  totalPages: number;
+  page: number;
+  limit: number;
+  metrics?: {
+    totalRequests: number;
+    totalPending: number;
+    totalCompleted: number;
+  };
   requests: DriverRequestRow[];
 };
 
-type AdminOverview = {
-  recentDrivers: DriverRow[];
-};
+const DRIVER_REQUESTS_PAGE_SIZE = 2;
 
 export default function DriverRequestsPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("all");
+  const [page, setPage] = useState(1);
   const [openAssign, setOpenAssign] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<DriverRequestRow | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const statusFilter = tab === "all" ? undefined : tab === "completed" ? "accepted" : tab;
 
   const requestsQuery = useQuery({
-    queryKey: ["admin-driver-requests", "screen"],
-    queryFn: () => getDriverRequests({ page: 1, limit: 100 }),
-  });
-  const overviewQuery = useQuery({
-    queryKey: ["admin-overview"],
-    queryFn: getAdminOverview,
+    queryKey: ["admin-driver-requests", "screen", page, statusFilter],
+    queryFn: () => getDriverRequests({ page, limit: DRIVER_REQUESTS_PAGE_SIZE, status: statusFilter }),
   });
   const driversQuery = useQuery({
     queryKey: ["admin-drivers"],
@@ -80,23 +85,16 @@ export default function DriverRequestsPage() {
   });
 
   const requestsData = requestsQuery.data as DriverRequestsResponse | undefined;
-  const overview = overviewQuery.data as AdminOverview | undefined;
   const drivers = (driversQuery.data as DriverRow[] | undefined) || [];
+  const requests = requestsData?.requests || [];
+  const totalRequests = requestsData?.metrics?.totalRequests ?? requestsData?.total ?? requests.length;
+  const totalPending = requestsData?.metrics?.totalPending ?? requests.filter((row) => row.status === "pending").length;
+  const totalCompleted = requestsData?.metrics?.totalCompleted ?? requests.filter((row) => row.status === "accepted").length;
+  const responsePage = requestsData?.page || page;
+  const totalPages = requestsData?.totalPages || 1;
+  const pageTotal = requestsData?.total || requests.length;
 
-  const filteredRequests = useMemo(() => {
-    const rows = requestsData?.requests || [];
-    if (tab === "all") {
-      return rows;
-    }
-
-    if (tab === "completed") {
-      return rows.filter((row) => row.status === "accepted");
-    }
-
-    return rows.filter((row) => row.status === tab);
-  }, [requestsData?.requests, tab]);
-
-  if (requestsQuery.isLoading || overviewQuery.isLoading) {
+  if (requestsQuery.isLoading) {
     return (
       <AdminPageFrame title="For Driver Requests" subtitle="See Orders from this Store">
         <div className="grid gap-4 lg:grid-cols-3">
@@ -109,15 +107,13 @@ export default function DriverRequestsPage() {
     );
   }
 
-  const totalPending = (requestsData?.requests || []).filter((row) => row.status === "pending").length;
-  const totalCompleted = (requestsData?.requests || []).filter((row) => row.status === "accepted").length;
   const selectedRequestOrderLabel =
     selectedRequest?.orderId?.orderId || selectedRequest?.orderId?._id || selectedRequest?._id || "Request";
 
   return (
     <AdminPageFrame title="For Driver Requests" subtitle="See Orders from this Store">
       <div className="grid gap-4 lg:grid-cols-3">
-        <AdminMetricCard label="Total Driver Request" value={requestsData?.total || filteredRequests.length} accent="blue" />
+        <AdminMetricCard label="Total Driver Request" value={totalRequests} accent="blue" />
         <AdminMetricCard label="Total Pending" value={totalPending} accent="amber" />
         <AdminMetricCard label="Total Completed" value={totalCompleted} accent="green" />
       </div>
@@ -130,12 +126,15 @@ export default function DriverRequestsPage() {
             { label: "Completed", value: "completed" },
           ]}
           value={tab}
-          onChange={setTab}
+          onChange={(value) => {
+            setTab(value);
+            setPage(1);
+          }}
         />
       </div>
 
       <div className="mt-6 space-y-5">
-        {filteredRequests.map((request) => (
+        {requests.map((request) => (
           <RequestCard
             key={request._id}
             request={{
@@ -150,6 +149,20 @@ export default function DriverRequestsPage() {
             }}
           />
         ))}
+        {requests.length === 0 ? (
+          <div className="rounded-[18px] border border-[#d2dce7] bg-[#f8fbff] px-5 py-10 text-center text-[15px] text-[#667085]">
+            No driver requests found.
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 rounded-[14px] border border-[#e2e8f0] bg-white text-[14px] text-[#5b6371] md:flex-row md:items-center md:justify-between md:pl-5">
+        <span className="px-5 pt-4 md:px-0 md:pt-0">
+          {requests.length > 0
+            ? `Showing ${(responsePage - 1) * DRIVER_REQUESTS_PAGE_SIZE + 1} to ${(responsePage - 1) * DRIVER_REQUESTS_PAGE_SIZE + requests.length} of ${pageTotal} results`
+            : "Showing 0 results"}
+        </span>
+        <Pagination page={responsePage} totalPages={totalPages} onPageChange={setPage} />
       </div>
 
       <AssignDriverModal

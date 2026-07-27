@@ -81,9 +81,13 @@ export async function updateOrderStatus(orderId: string, payload: { status: stri
   return response.data.data;
 }
 
-export async function getDriverRequests(params: { page: number; limit: number }) {
+export async function getDriverRequests(params: { page: number; limit: number; status?: string }) {
   const response = await apiClient.get("/driver-request/driver-requests", { params });
-  return response.data.data;
+  const payload = response.data.data || {};
+  return {
+    ...payload,
+    totalPages: payload.totalPages ?? payload.totalPage ?? 1,
+  };
 }
 
 export async function updateDriverRequestStatus(id: string, status: string) {

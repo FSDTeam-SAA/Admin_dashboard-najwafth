@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import {
   Bike,
   CheckCircle2,
@@ -22,6 +23,7 @@ import { cn, formatCurrency, formatDate, getAssetUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 
 export type AdminMetricCardProps = {
   label: string;
@@ -82,6 +84,8 @@ const statusStyles = {
   rejected: "bg-[#fde7e7] text-[#d92d20]",
   shipped: "bg-[#ddeafe] text-[#2f80ed]",
 } as const;
+
+const DRIVER_PICKER_PAGE_SIZE = 4;
 
 function getStatusTone(status?: string) {
   return statusStyles[(status || "pending").toLowerCase() as keyof typeof statusStyles] || "bg-[#eef2f7] text-slate-600";
@@ -401,7 +405,27 @@ export function DriverCard({
   const driverDisplayName = driver.name || driver.email?.split("@")[0] || "Driver";
 
   return (
-    <Card className={cn("rounded-[18px] border-[#d6dee7] p-4 shadow-none", selected ? "border-[#6d98c0] bg-[#f5f9ff]" : "")}>
+    <Card
+      aria-pressed={onAssign ? selected : undefined}
+      className={cn(
+        "rounded-[18px] border-[#d6dee7] p-4 shadow-none",
+        onAssign ? "cursor-pointer transition hover:border-[#6d98c0] hover:bg-[#f8fbff]" : "",
+        selected ? "border-[#3d7eb8] bg-[#f0f7ff] ring-2 ring-[#6d98c0]" : "",
+      )}
+      onClick={onAssign}
+      onKeyDown={(event) => {
+        if (!onAssign) {
+          return;
+        }
+
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onAssign();
+        }
+      }}
+      role={onAssign ? "button" : undefined}
+      tabIndex={onAssign ? 0 : undefined}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="flex gap-3">
           <div className="relative flex size-11 items-center justify-center overflow-hidden rounded-full bg-[#dab38f] text-sm font-semibold text-white">
@@ -459,6 +483,28 @@ export function AssignDriverModal({
   onAssignDriver?: () => void;
   loading?: boolean;
 }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const normalizedSearch = searchTerm.trim().toLowerCase();
+  const filteredDrivers = useMemo(() => {
+    if (!normalizedSearch) {
+      return drivers;
+    }
+
+    return drivers.filter((driver) => {
+      const availability = driver.status || (driver.currentOrders ? "busy" : "available");
+      return [driver.name, driver.email, driver.phone, availability]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(normalizedSearch));
+    });
+  }, [drivers, normalizedSearch]);
+  const totalPages = Math.max(1, Math.ceil(filteredDrivers.length / DRIVER_PICKER_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedDrivers = filteredDrivers.slice(
+    (currentPage - 1) * DRIVER_PICKER_PAGE_SIZE,
+    currentPage * DRIVER_PICKER_PAGE_SIZE,
+  );
+
   if (!open) {
     return null;
   }
@@ -476,7 +522,19 @@ export function AssignDriverModal({
           </button>
         </div>
         <div className="px-6 pb-6">
-          <div className="mb-4 flex justify-end">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-[360px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#667085]" />
+              <Input
+                className="h-10 rounded-[10px] border-[#d6dee7] pl-9 text-[14px]"
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search driver"
+                value={searchTerm}
+              />
+            </div>
             <Button
               className="h-10 rounded-[10px] bg-[#6d98c0] px-5 text-[15px] hover:bg-[#5f88ae]"
               disabled={!selectedDriverId || assigning || !onAssignDriver}
@@ -487,11 +545,14 @@ export function AssignDriverModal({
               {!onAssignDriver ? "Assigned" : assigning ? "Assigning..." : "Assign Driver"}
             </Button>
           </div>
-          <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-1">
+          <div className="max-h-[58vh] space-y-3 overflow-y-auto pr-1">
             {loading ? <p className="py-8 text-center text-[14px] text-[#667085]">Loading drivers...</p> : null}
             {!loading && drivers.length === 0 ? <p className="py-8 text-center text-[14px] text-[#667085]">No drivers available.</p> : null}
+            {!loading && drivers.length > 0 && filteredDrivers.length === 0 ? (
+              <p className="py-8 text-center text-[14px] text-[#667085]">No drivers match your search.</p>
+            ) : null}
             {!loading
-              ? drivers.map((driver) => (
+              ? paginatedDrivers.map((driver) => (
                   <DriverCard
                     key={driver._id}
                     compact
@@ -502,6 +563,15 @@ export function AssignDriverModal({
                 ))
               : null}
           </div>
+          {!loading && filteredDrivers.length > 0 ? (
+            <div className="mt-4 flex flex-col gap-2 rounded-[12px] border border-[#e2e8f0] text-[13px] text-[#667085] sm:flex-row sm:items-center sm:justify-between sm:pl-4">
+              <span className="px-4 pt-3 sm:px-0 sm:pt-0">
+                Showing {(currentPage - 1) * DRIVER_PICKER_PAGE_SIZE + 1} to{" "}
+                {Math.min(currentPage * DRIVER_PICKER_PAGE_SIZE, filteredDrivers.length)} of {filteredDrivers.length} drivers
+              </span>
+              <Pagination page={currentPage} totalPages={totalPages} onPageChange={setPage} />
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
