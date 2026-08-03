@@ -1,17 +1,22 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { AdminMetricCard, AdminPageFrame, AssignDriverModal, DriverCard, RequestCard } from "@/components/admin/primitives";
 import { AdminSectionCard } from "@/components/admin/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAdminOverview } from "@/lib/api";
+import { assignDriverToRequest, getAdminOverview, getDrivers } from "@/lib/api";
+import { toast } from "sonner";
 
 type DriverRequestRow = {
   _id: string;
   shopName?: string;
   phone?: string;
+  shopPhone?: string;
+  customerPhone?: string;
+  shopLocation?: string;
+  customerLocation?: string;
   customerName?: string;
   location?: string;
   item?: string;
@@ -20,6 +25,15 @@ type DriverRequestRow = {
   totalAmount?: number;
   price?: number;
   status?: string;
+  driver?: {
+    _id?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    avatar?: {
+      url?: string;
+    };
+  };
   orderId?:
     | string
     | {
@@ -34,6 +48,12 @@ type DriverRow = {
   email?: string;
   phone?: string;
   avatar?: { url?: string };
+  status?: "offline" | "available" | "busy";
+  rideStatus?: "available" | "busy";
+  onlineStatus?: "online" | "offline";
+  isOnline?: boolean;
+  currentOrders?: number;
+  completedDeliveries?: number;
 };
 
 type AdminOverview = {
@@ -86,11 +106,35 @@ function DashboardLoading() {
 }
 
 export default function AdminDashboardPage() {
+  const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ["admin-overview"],
     queryFn: getAdminOverview,
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: true,
   });
   const [assigningRequestId, setAssigningRequestId] = useState<string | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const driversQuery = useQuery({
+    queryKey: ["admin-drivers"],
+    queryFn: getDrivers,
+    enabled: Boolean(assigningRequestId),
+    refetchInterval: assigningRequestId ? 2_000 : false,
+    refetchOnWindowFocus: true,
+  });
+
+  const assignMutation = useMutation({
+    mutationFn: ({ requestId, driverId }: { requestId: string; driverId: string }) =>
+      assignDriverToRequest(requestId, driverId),
+    onSuccess: () => {
+      toast.success("Driver assigned successfully.");
+      queryClient.invalidateQueries({ queryKey: ["admin-overview"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-driver-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-drivers"] });
+      setAssigningRequestId(null);
+      setSelectedDriverId(null);
+    },
+  });
 
   const overview = data as AdminOverview | undefined;
   const deliveryActivity = overview?.deliveryActivity?.length ? overview.deliveryActivity : sampleActivity;
@@ -109,6 +153,11 @@ export default function AdminDashboardPage() {
       }),
     [overview],
   );
+  const selectedRequest = requestRows.find(
+    (request) => request._id === assigningRequestId,
+  );
+  const selectedOrderLabel = selectedRequest?.orderId || "Request";
+  const drivers = (driversQuery.data as DriverRow[] | undefined) || [];
 
   if (isLoading) {
     return <DashboardLoading />;
@@ -203,8 +252,19 @@ export default function AdminDashboardPage() {
               <RequestCard
                 key={request._id}
                 request={request}
-                actionLabel="Assign Driver"
-                onAction={() => setAssigningRequestId(request._id)}
+                actionLabel={
+                  request.status === "accepted"
+                    ? "Driver Accepted"
+                    : request.driver?._id
+                      ? "Change Driver"
+                      : "Assign Driver"
+                }
+                actionDisabled={request.status !== "pending"}
+                onAction={() => {
+                  if (request.status !== "pending") return;
+                  setAssigningRequestId(request._id);
+                  setSelectedDriverId(null);
+                }}
               />
             ))}
           </div>
@@ -221,13 +281,9 @@ export default function AdminDashboardPage() {
             {(overview?.recentDrivers || []).map((driver) => (
               <DriverCard
                 key={driver._id}
-                driver={{
-                  ...driver,
-                  status: "available",
-                }}
+                driver={driver}
                 compact
                 onView={() => undefined}
-                onAssign={() => setAssigningRequestId(driver._id)}
               />
             ))}
           </div>
@@ -237,15 +293,27 @@ export default function AdminDashboardPage() {
       {assigningRequestId ? (
         <AssignDriverModal
           open={Boolean(assigningRequestId)}
-          title="Assign Driver to Order #OI027"
-          drivers={
-            (overview?.recentDrivers || []).map((driver, index) => ({
-              ...driver,
-              status: index % 3 === 1 ? "busy" : "available",
-              currentOrders: index % 3 === 1 ? 2 : 0,
-            })) || []
-          }
-          onClose={() => setAssigningRequestId(null)}
+          title={`Assign Driver to Order #${selectedOrderLabel}`}
+          drivers={drivers}
+          loading={driversQuery.isLoading}
+          selectedDriverId={selectedDriverId}
+          assigning={assignMutation.isPending}
+          onSelectDriver={setSelectedDriverId}
+          onAssignDriver={() => {
+            if (!assigningRequestId || !selectedDriverId) {
+              toast.error("Select an available, online driver first.");
+              return;
+            }
+
+            assignMutation.mutate({
+              requestId: assigningRequestId,
+              driverId: selectedDriverId,
+            });
+          }}
+          onClose={() => {
+            setAssigningRequestId(null);
+            setSelectedDriverId(null);
+          }}
         />
       ) : null}
     </AdminPageFrame>

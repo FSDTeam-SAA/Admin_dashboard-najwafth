@@ -12,13 +12,17 @@ import {
 } from "@/components/admin/primitives";
 import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
-import { assignDriverToRequest, getDriverRequests, getDrivers, updateDriverRequestStatus } from "@/lib/api";
+import { assignDriverToRequest, getDriverRequests, getDrivers } from "@/lib/api";
 import { toast } from "sonner";
 
 type DriverRequestRow = {
   _id: string;
   shopName?: string;
   phone?: string;
+  shopPhone?: string;
+  customerPhone?: string;
+  shopLocation?: string;
+  customerLocation?: string;
   customerName?: string;
   location?: string;
   item?: string;
@@ -34,6 +38,11 @@ type DriverRequestRow = {
   driver?: {
     _id?: string;
     name?: string;
+    email?: string;
+    phone?: string;
+    avatar?: {
+      url?: string;
+    };
   };
 };
 
@@ -64,12 +73,14 @@ export default function DriverRequestsPage() {
   const requestsQuery = useQuery({
     queryKey: ["admin-driver-requests", "screen", page, statusFilter],
     queryFn: () => getDriverRequests({ page, limit: DRIVER_REQUESTS_PAGE_SIZE, status: statusFilter }),
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: true,
   });
   const driversQuery = useQuery({
     queryKey: ["admin-drivers"],
     queryFn: getDrivers,
     enabled: openAssign,
-    refetchInterval: openAssign ? 10_000 : false,
+    refetchInterval: openAssign ? 2_000 : false,
     refetchOnWindowFocus: true,
   });
 
@@ -83,20 +94,6 @@ export default function DriverRequestsPage() {
       setOpenAssign(false);
       setSelectedRequest(null);
       setSelectedDriverId(null);
-    },
-  });
-
-  const overrideStatusMutation = useMutation({
-    mutationFn: ({ requestId, status }: { requestId: string; status: string }) =>
-      updateDriverRequestStatus(requestId, status),
-    onSuccess: (_data, variables) => {
-      toast.success(
-        variables.status === "accepted"
-          ? "Request marked as accepted."
-          : "Request reset to pending.",
-      );
-      queryClient.invalidateQueries({ queryKey: ["admin-driver-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["admin-drivers"] });
     },
   });
 
@@ -139,6 +136,7 @@ export default function DriverRequestsPage() {
           items={[
             { label: "All", value: "all" },
             { label: "Pending", value: "pending" },
+            { label: "Current Offers", value: "accepted" },
             { label: "Completed", value: "completed" },
           ]}
           value={tab}
@@ -151,28 +149,8 @@ export default function DriverRequestsPage() {
 
       <div className="mt-6 space-y-5">
         {requests.map((request) => {
-          const isOverriding =
-            overrideStatusMutation.isPending &&
-            overrideStatusMutation.variables?.requestId === request._id;
-          const secondaryActions = [];
-
-          if (request.driver?._id && request.status === "pending") {
-            secondaryActions.push({
-              label: "Mark Accepted",
-              disabled: isOverriding,
-              onClick: () =>
-                overrideStatusMutation.mutate({ requestId: request._id, status: "accepted" }),
-            });
-          }
-
-          if (request.status === "accepted") {
-            secondaryActions.push({
-              label: "Reset to Pending",
-              disabled: isOverriding,
-              onClick: () =>
-                overrideStatusMutation.mutate({ requestId: request._id, status: "pending" }),
-            });
-          }
+          const isAccepted = request.status === "accepted";
+          const canAssign = request.status === "pending";
 
           return (
             <RequestCard
@@ -181,9 +159,16 @@ export default function DriverRequestsPage() {
                 ...request,
                 orderId: request.orderId?.orderId || request.orderId?._id || request._id,
               }}
-              actionLabel={request.driver?._id ? "Change Driver" : "Assign Driver"}
-              secondaryActions={secondaryActions}
+              actionLabel={
+                isAccepted
+                  ? "Driver Accepted"
+                  : request.driver?._id
+                    ? "Change Driver"
+                    : "Assign Driver"
+              }
+              actionDisabled={!canAssign}
               onAction={() => {
+                if (!canAssign) return;
                 setSelectedRequest(request);
                 setSelectedDriverId(null);
                 setOpenAssign(true);
@@ -215,10 +200,10 @@ export default function DriverRequestsPage() {
         selectedDriverId={selectedDriverId}
         assigning={assignMutation.isPending}
         warning={
-          selectedRequest?.driver?._id
+          selectedRequest?.driver?._id && selectedRequest.status === "pending"
             ? `This request is already assigned to ${selectedRequest.driver.name || "a driver"} (status: ${
                 selectedRequest.status || "pending"
-              }). Reassigning will overwrite the assignment; the previous driver will not be automatically notified.`
+              }). Reassigning will notify the previous driver.`
             : undefined
         }
         onSelectDriver={setSelectedDriverId}

@@ -10,9 +10,12 @@ import {
   AssignDriverModal,
   RequestCard,
   SegmentedTabs,
+  getDriverOnlineStatus,
+  getDriverRideStatus,
+  type DriverRow,
 } from "@/components/admin/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAdminOverview, getDriverRequestsByDriver } from "@/lib/api";
+import { getDriverRequestsByDriver, getDrivers } from "@/lib/api";
 
 type DriverRequestRow = {
   _id: string;
@@ -34,22 +37,16 @@ type DriverRequestRow = {
   price?: number;
 };
 
-type Overview = {
-  recentDrivers: {
-    _id: string;
-    name?: string;
-    phone?: string;
-  }[];
-};
-
 export default function DriverProfilePage() {
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("all");
   const [assignOpen, setAssignOpen] = useState(false);
 
-  const overviewQuery = useQuery({
-    queryKey: ["admin-overview"],
-    queryFn: getAdminOverview,
+  const driversQuery = useQuery({
+    queryKey: ["admin-drivers"],
+    queryFn: getDrivers,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
   });
   const requestsQuery = useQuery({
     queryKey: ["driver-profile-requests", params.id],
@@ -57,10 +54,12 @@ export default function DriverProfilePage() {
     enabled: Boolean(params.id),
   });
 
-  const overview = overviewQuery.data as Overview | undefined;
+  const drivers = (driversQuery.data as DriverRow[] | undefined) || [];
   const requestsData = requestsQuery.data as DriverRequestRow[] | undefined;
   const requests = requestsData || [];
-  const driver = overview?.recentDrivers.find((row) => row._id === params.id) || overview?.recentDrivers[0];
+  const driver = drivers.find((row) => row._id === params.id);
+  const rideStatus = driver ? getDriverRideStatus(driver) : "available";
+  const onlineStatus = driver ? getDriverOnlineStatus(driver) : "offline";
 
   const scopedRequests = (() => {
     if (tab === "all") {
@@ -74,7 +73,7 @@ export default function DriverProfilePage() {
     return requests.filter((row) => row.status === tab);
   })();
 
-  if (overviewQuery.isLoading || requestsQuery.isLoading) {
+  if (driversQuery.isLoading || requestsQuery.isLoading) {
     return (
       <section className="bg-white px-6 py-7 md:px-8">
         <Skeleton className="h-[52px] w-[360px] rounded-[12px]" />
@@ -95,7 +94,14 @@ export default function DriverProfilePage() {
             </div>
             <div>
               <h2 className="text-[28px] font-semibold text-[#17223b]">{driver?.name || "Rahim Khan"}</h2>
-              <p className="mt-2 text-[18px] text-[#16a34a]">Available</p>
+              <div className="mt-2 flex items-center gap-5 text-[18px] capitalize">
+                <p className={rideStatus === "busy" ? "text-[#f97316]" : "text-[#16a34a]"}>
+                  {rideStatus}
+                </p>
+                <p className={onlineStatus === "online" ? "text-[#16a34a]" : "text-[#667085]"}>
+                  {onlineStatus}
+                </p>
+              </div>
               <p className="mt-4 text-[28px] font-medium text-[#202124]">
                 Vehicle: <span className="text-[#4090f7]">Bike</span>
               </p>
@@ -157,11 +163,7 @@ export default function DriverProfilePage() {
         open={assignOpen}
         title="Assign Driver to Order #OI027"
         drivers={
-          (overview?.recentDrivers || []).map((row, index) => ({
-            ...row,
-            status: index % 2 === 0 ? "available" : "busy",
-            currentOrders: index % 2 === 0 ? 0 : 2,
-          })) || []
+          drivers
         }
         onClose={() => setAssignOpen(false)}
       />

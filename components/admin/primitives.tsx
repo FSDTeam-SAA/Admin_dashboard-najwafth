@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock3,
+  Mail,
   MapPin,
   Package2,
   Phone,
@@ -49,6 +50,15 @@ export type OrderRequestRow = {
   price?: number;
   item?: string;
   status?: string;
+  driver?: {
+    _id?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    avatar?: {
+      url?: string;
+    };
+  };
 };
 
 export type DriverRow = {
@@ -60,6 +70,8 @@ export type DriverRow = {
     url?: string;
   };
   status?: "offline" | "available" | "busy";
+  rideStatus?: "available" | "busy";
+  onlineStatus?: "online" | "offline";
   isOnline?: boolean;
   vehicle?: string;
   completedDeliveries?: number;
@@ -89,15 +101,22 @@ const statusStyles = {
 
 const DRIVER_PICKER_PAGE_SIZE = 4;
 
-function getDriverAvailability(driver: DriverRow) {
-  return (
-    driver.status ||
-    (driver.isOnline === false
-      ? "offline"
-      : driver.currentOrders
-        ? "busy"
-        : "available")
-  );
+export function getDriverAvailability(driver: DriverRow) {
+  if (getDriverOnlineStatus(driver) === "offline") {
+    return "offline";
+  }
+
+  return getDriverRideStatus(driver);
+}
+
+export function getDriverRideStatus(driver: DriverRow) {
+  return driver.rideStatus || ((driver.currentOrders || 0) > 0 ? "busy" : "available");
+}
+
+export function getDriverOnlineStatus(driver: DriverRow) {
+  if (driver.onlineStatus) return driver.onlineStatus;
+  if (driver.isOnline !== undefined) return driver.isOnline ? "online" : "offline";
+  return driver.status === "offline" ? "offline" : "online";
 }
 
 function getStatusTone(status?: string) {
@@ -337,13 +356,23 @@ export function RequestCard({
   request,
   actionLabel,
   onAction,
+  actionDisabled,
   secondaryActions,
 }: {
   request: OrderRequestRow;
   actionLabel?: string;
   onAction?: () => void;
+  actionDisabled?: boolean;
   secondaryActions?: { label: string; onClick: () => void; disabled?: boolean }[];
 }) {
+  const requestStatus = request.status?.toLowerCase();
+  const showDriverInformation =
+    Boolean(request.driver?._id) &&
+    (requestStatus === "accepted" || requestStatus === "completed");
+  const driverName =
+    request.driver?.name || request.driver?.email?.split("@")[0] || "Driver";
+  const driverAvatarUrl = getAssetUrl(request.driver?.avatar);
+
   return (
     <Card className="rounded-[18px] border-[#d2dce7] bg-[#ecf5ff] p-5 shadow-none">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -373,6 +402,7 @@ export function RequestCard({
           {actionLabel && onAction ? (
             <Button
               className="h-[38px] rounded-[10px] bg-[#6d98c0] px-5 text-[15px] hover:bg-[#5f88ae]"
+              disabled={actionDisabled}
               onClick={onAction}
               type="button"
             >
@@ -381,6 +411,43 @@ export function RequestCard({
           ) : null}
         </div>
       </div>
+
+      {showDriverInformation ? (
+        <div className="mt-5 flex flex-col gap-4 rounded-[12px] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#dab38f] text-[15px] font-semibold text-white">
+              {driverAvatarUrl ? (
+                <Image
+                  src={driverAvatarUrl}
+                  alt={driverName}
+                  fill
+                  sizes="48px"
+                  className="object-cover"
+                />
+              ) : (
+                driverName.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div>
+              <p className="flex items-center gap-2 text-[14px] font-medium text-[#667085]">
+                <UserRound className="size-4 text-[#4090f7]" />
+                Assigned Driver
+              </p>
+              <p className="mt-1 text-[16px] font-semibold text-[#202124]">{driverName}</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 text-[14px] text-[#667085] sm:items-end">
+            <p className="flex items-center gap-2">
+              <Phone className="size-4" />
+              {request.driver?.phone || "Phone unavailable"}
+            </p>
+            <p className="flex items-center gap-2">
+              <Mail className="size-4" />
+              {request.driver?.email || "Email unavailable"}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div className="rounded-[12px] bg-white p-5">
@@ -428,7 +495,8 @@ export function DriverCard({
   onAssign?: () => void;
   selected?: boolean;
 }) {
-  const availability = getDriverAvailability(driver);
+  const rideStatus = getDriverRideStatus(driver);
+  const onlineStatus = getDriverOnlineStatus(driver);
   const avatarUrl = getAssetUrl(driver.avatar);
   const driverDisplayName = driver.name || driver.email?.split("@")[0] || "Driver";
 
@@ -465,17 +533,16 @@ export function DriverCard({
           </div>
           <div>
             <p className="text-[16px] font-semibold text-[#202124]">{driverDisplayName}</p>
-            <p className={cn(
-              "mt-1 text-[13px] font-medium capitalize",
-              availability === "busy"
-                ? "text-[#f97316]"
-                : availability === "offline"
-                  ? "text-[#667085]"
-                  : "text-[#16a34a]",
-            )}>
-              <span className="mr-2 inline-block size-2 rounded-full bg-current" />
-              {availability}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-medium capitalize">
+              <p className={rideStatus === "busy" ? "text-[#f97316]" : "text-[#16a34a]"}>
+                <span className="mr-2 inline-block size-2 rounded-full bg-current" />
+                {rideStatus}
+              </p>
+              <p className={onlineStatus === "online" ? "text-[#16a34a]" : "text-[#667085]"}>
+                <span className="mr-2 inline-block size-2 rounded-full bg-current" />
+                {onlineStatus}
+              </p>
+            </div>
             <div className="mt-3 space-y-2 text-[13px] text-[#667085]">
               <p className="flex items-center gap-2"><Phone className="size-4" /> {driver.phone || "+880 1712-345678"}</p>
               <p className="flex items-center gap-2"><Package2 className="size-4" /> {driver.completedDeliveries || 234} deliveries</p>
@@ -529,8 +596,9 @@ export function AssignDriverModal({
     }
 
     return drivers.filter((driver) => {
-      const availability = getDriverAvailability(driver);
-      return [driver.name, driver.email, driver.phone, availability]
+      const rideStatus = getDriverRideStatus(driver);
+      const onlineStatus = getDriverOnlineStatus(driver);
+      return [driver.name, driver.email, driver.phone, rideStatus, onlineStatus]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(normalizedSearch));
     });
