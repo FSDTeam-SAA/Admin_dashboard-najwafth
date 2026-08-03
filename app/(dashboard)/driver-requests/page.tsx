@@ -19,6 +19,10 @@ type DriverRequestRow = {
   _id: string;
   shopName?: string;
   phone?: string;
+  shopPhone?: string;
+  customerPhone?: string;
+  shopLocation?: string;
+  customerLocation?: string;
   customerName?: string;
   location?: string;
   item?: string;
@@ -34,6 +38,11 @@ type DriverRequestRow = {
   driver?: {
     _id?: string;
     name?: string;
+    email?: string;
+    phone?: string;
+    avatar?: {
+      url?: string;
+    };
   };
 };
 
@@ -59,16 +68,20 @@ export default function DriverRequestsPage() {
   const [openAssign, setOpenAssign] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<DriverRequestRow | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
-  const statusFilter = tab === "all" ? undefined : tab === "completed" ? "accepted" : tab;
+  const statusFilter = tab === "all" ? undefined : tab;
 
   const requestsQuery = useQuery({
     queryKey: ["admin-driver-requests", "screen", page, statusFilter],
     queryFn: () => getDriverRequests({ page, limit: DRIVER_REQUESTS_PAGE_SIZE, status: statusFilter }),
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: true,
   });
   const driversQuery = useQuery({
     queryKey: ["admin-drivers"],
     queryFn: getDrivers,
     enabled: openAssign,
+    refetchInterval: openAssign ? 2_000 : false,
+    refetchOnWindowFocus: true,
   });
 
   const assignMutation = useMutation({
@@ -89,7 +102,7 @@ export default function DriverRequestsPage() {
   const requests = requestsData?.requests || [];
   const totalRequests = requestsData?.metrics?.totalRequests ?? requestsData?.total ?? requests.length;
   const totalPending = requestsData?.metrics?.totalPending ?? requests.filter((row) => row.status === "pending").length;
-  const totalCompleted = requestsData?.metrics?.totalCompleted ?? requests.filter((row) => row.status === "accepted").length;
+  const totalCompleted = requestsData?.metrics?.totalCompleted ?? requests.filter((row) => row.status === "completed").length;
   const responsePage = requestsData?.page || page;
   const totalPages = requestsData?.totalPages || 1;
   const pageTotal = requestsData?.total || requests.length;
@@ -123,6 +136,7 @@ export default function DriverRequestsPage() {
           items={[
             { label: "All", value: "all" },
             { label: "Pending", value: "pending" },
+            { label: "Current Offers", value: "accepted" },
             { label: "Completed", value: "completed" },
           ]}
           value={tab}
@@ -134,21 +148,34 @@ export default function DriverRequestsPage() {
       </div>
 
       <div className="mt-6 space-y-5">
-        {requests.map((request) => (
-          <RequestCard
-            key={request._id}
-            request={{
-              ...request,
-              orderId: request.orderId?.orderId || request.orderId?._id || request._id,
-            }}
-            actionLabel={request.driver?._id ? "Change Driver" : "Assign Driver"}
-            onAction={() => {
-              setSelectedRequest(request);
-              setSelectedDriverId(request.driver?._id || null);
-              setOpenAssign(true);
-            }}
-          />
-        ))}
+        {requests.map((request) => {
+          const isAccepted = request.status === "accepted";
+          const canAssign = request.status === "pending";
+
+          return (
+            <RequestCard
+              key={request._id}
+              request={{
+                ...request,
+                orderId: request.orderId?.orderId || request.orderId?._id || request._id,
+              }}
+              actionLabel={
+                isAccepted
+                  ? "Driver Accepted"
+                  : request.driver?._id
+                    ? "Change Driver"
+                    : "Assign Driver"
+              }
+              actionDisabled={!canAssign}
+              onAction={() => {
+                if (!canAssign) return;
+                setSelectedRequest(request);
+                setSelectedDriverId(null);
+                setOpenAssign(true);
+              }}
+            />
+          );
+        })}
         {requests.length === 0 ? (
           <div className="rounded-[18px] border border-[#d2dce7] bg-[#f8fbff] px-5 py-10 text-center text-[15px] text-[#667085]">
             No driver requests found.
@@ -172,6 +199,13 @@ export default function DriverRequestsPage() {
         loading={driversQuery.isLoading}
         selectedDriverId={selectedDriverId}
         assigning={assignMutation.isPending}
+        warning={
+          selectedRequest?.driver?._id && selectedRequest.status === "pending"
+            ? `This request is already assigned to ${selectedRequest.driver.name || "a driver"} (status: ${
+                selectedRequest.status || "pending"
+              }). Reassigning will notify the previous driver.`
+            : undefined
+        }
         onSelectDriver={setSelectedDriverId}
         onAssignDriver={() => {
           if (!selectedRequest?._id || !selectedDriverId) {

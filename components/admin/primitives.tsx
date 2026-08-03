@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock3,
+  Mail,
   MapPin,
   Package2,
   Phone,
@@ -49,6 +50,15 @@ export type OrderRequestRow = {
   price?: number;
   item?: string;
   status?: string;
+  driver?: {
+    _id?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    avatar?: {
+      url?: string;
+    };
+  };
 };
 
 export type DriverRow = {
@@ -59,7 +69,10 @@ export type DriverRow = {
   avatar?: {
     url?: string;
   };
-  status?: "available" | "busy";
+  status?: "offline" | "available" | "busy";
+  rideStatus?: "available" | "busy";
+  onlineStatus?: "online" | "offline";
+  isOnline?: boolean;
   vehicle?: string;
   completedDeliveries?: number;
   currentOrders?: number;
@@ -81,11 +94,30 @@ const statusStyles = {
   completed: "bg-[#c9e7d3] text-[#16934b]",
   available: "bg-transparent text-[#16a34a]",
   busy: "bg-transparent text-[#f97316]",
+  offline: "bg-transparent text-[#667085]",
   rejected: "bg-[#fde7e7] text-[#d92d20]",
   shipped: "bg-[#ddeafe] text-[#2f80ed]",
 } as const;
 
 const DRIVER_PICKER_PAGE_SIZE = 4;
+
+export function getDriverAvailability(driver: DriverRow) {
+  if (getDriverOnlineStatus(driver) === "offline") {
+    return "offline";
+  }
+
+  return getDriverRideStatus(driver);
+}
+
+export function getDriverRideStatus(driver: DriverRow) {
+  return driver.rideStatus || ((driver.currentOrders || 0) > 0 ? "busy" : "available");
+}
+
+export function getDriverOnlineStatus(driver: DriverRow) {
+  if (driver.onlineStatus) return driver.onlineStatus;
+  if (driver.isOnline !== undefined) return driver.isOnline ? "online" : "offline";
+  return driver.status === "offline" ? "offline" : "online";
+}
 
 function getStatusTone(status?: string) {
   return statusStyles[(status || "pending").toLowerCase() as keyof typeof statusStyles] || "bg-[#eef2f7] text-slate-600";
@@ -324,11 +356,23 @@ export function RequestCard({
   request,
   actionLabel,
   onAction,
+  actionDisabled,
+  secondaryActions,
 }: {
   request: OrderRequestRow;
   actionLabel?: string;
   onAction?: () => void;
+  actionDisabled?: boolean;
+  secondaryActions?: { label: string; onClick: () => void; disabled?: boolean }[];
 }) {
+  const requestStatus = request.status?.toLowerCase();
+  const showDriverInformation =
+    Boolean(request.driver?._id) &&
+    (requestStatus === "accepted" || requestStatus === "completed");
+  const driverName =
+    request.driver?.name || request.driver?.email?.split("@")[0] || "Driver";
+  const driverAvatarUrl = getAssetUrl(request.driver?.avatar);
+
   return (
     <Card className="rounded-[18px] border-[#d2dce7] bg-[#ecf5ff] p-5 shadow-none">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -343,16 +387,67 @@ export function RequestCard({
             <StatusPill status={request.status} />
           </div>
         </div>
-        {actionLabel && onAction ? (
-          <Button
-            className="h-[38px] rounded-[10px] bg-[#6d98c0] px-5 text-[15px] hover:bg-[#5f88ae]"
-            onClick={onAction}
-            type="button"
-          >
-            {actionLabel}
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {secondaryActions?.map((action) => (
+            <button
+              key={action.label}
+              className="h-[38px] rounded-[10px] border border-[#d2dce7] px-4 text-[14px] font-medium text-[#5b6371] transition hover:border-[#6d98c0] hover:text-[#202124] disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={action.disabled}
+              onClick={action.onClick}
+              type="button"
+            >
+              {action.label}
+            </button>
+          ))}
+          {actionLabel && onAction ? (
+            <Button
+              className="h-[38px] rounded-[10px] bg-[#6d98c0] px-5 text-[15px] hover:bg-[#5f88ae]"
+              disabled={actionDisabled}
+              onClick={onAction}
+              type="button"
+            >
+              {actionLabel}
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      {showDriverInformation ? (
+        <div className="mt-5 flex flex-col gap-4 rounded-[12px] bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#dab38f] text-[15px] font-semibold text-white">
+              {driverAvatarUrl ? (
+                <Image
+                  src={driverAvatarUrl}
+                  alt={driverName}
+                  fill
+                  sizes="48px"
+                  className="object-cover"
+                />
+              ) : (
+                driverName.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div>
+              <p className="flex items-center gap-2 text-[14px] font-medium text-[#667085]">
+                <UserRound className="size-4 text-[#4090f7]" />
+                Assigned Driver
+              </p>
+              <p className="mt-1 text-[16px] font-semibold text-[#202124]">{driverName}</p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 text-[14px] text-[#667085] sm:items-end">
+            <p className="flex items-center gap-2">
+              <Phone className="size-4" />
+              {request.driver?.phone || "Phone unavailable"}
+            </p>
+            <p className="flex items-center gap-2">
+              <Mail className="size-4" />
+              {request.driver?.email || "Email unavailable"}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div className="rounded-[12px] bg-white p-5">
@@ -400,7 +495,8 @@ export function DriverCard({
   onAssign?: () => void;
   selected?: boolean;
 }) {
-  const availability = driver.status || (driver.currentOrders ? "busy" : "available");
+  const rideStatus = getDriverRideStatus(driver);
+  const onlineStatus = getDriverOnlineStatus(driver);
   const avatarUrl = getAssetUrl(driver.avatar);
   const driverDisplayName = driver.name || driver.email?.split("@")[0] || "Driver";
 
@@ -437,17 +533,23 @@ export function DriverCard({
           </div>
           <div>
             <p className="text-[16px] font-semibold text-[#202124]">{driverDisplayName}</p>
-            <p className={cn("mt-1 text-[13px] font-medium capitalize", availability === "busy" ? "text-[#f97316]" : "text-[#16a34a]")}>
-              <span className="mr-2 inline-block size-2 rounded-full bg-current" />
-              {availability}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-medium capitalize">
+              <p className={rideStatus === "busy" ? "text-[#f97316]" : "text-[#16a34a]"}>
+                <span className="mr-2 inline-block size-2 rounded-full bg-current" />
+                {rideStatus}
+              </p>
+              <p className={onlineStatus === "online" ? "text-[#16a34a]" : "text-[#667085]"}>
+                <span className="mr-2 inline-block size-2 rounded-full bg-current" />
+                {onlineStatus}
+              </p>
+            </div>
             <div className="mt-3 space-y-2 text-[13px] text-[#667085]">
               <p className="flex items-center gap-2"><Phone className="size-4" /> {driver.phone || "+880 1712-345678"}</p>
               <p className="flex items-center gap-2"><Package2 className="size-4" /> {driver.completedDeliveries || 234} deliveries</p>
             </div>
-            {availability === "busy" ? (
+            {(driver.currentOrders || 0) > 0 ? (
               <div className="mt-4 rounded-[10px] bg-[#fff5e9] px-3 py-2 text-[14px] font-medium text-[#fe5e13]">
-                Current Orders: {driver.currentOrders || 2}
+                Current Orders: {driver.currentOrders}
               </div>
             ) : null}
             {!compact ? (
@@ -457,6 +559,16 @@ export function DriverCard({
             ) : null}
           </div>
         </div>
+        {onAssign ? (
+          selected ? (
+            <CheckCircle2 className="size-6 shrink-0 text-[#3d7eb8]" aria-label="Selected driver" />
+          ) : (
+            <span
+              className="size-6 shrink-0 rounded-full border-2 border-[#aebccc]"
+              aria-label="Select driver"
+            />
+          )
+        ) : null}
       </div>
     </Card>
   );
@@ -472,6 +584,7 @@ export function AssignDriverModal({
   onSelectDriver,
   onAssignDriver,
   loading,
+  warning,
 }: {
   open: boolean;
   title: string;
@@ -482,6 +595,7 @@ export function AssignDriverModal({
   onSelectDriver?: (driverId: string) => void;
   onAssignDriver?: () => void;
   loading?: boolean;
+  warning?: string;
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
@@ -492,14 +606,20 @@ export function AssignDriverModal({
     }
 
     return drivers.filter((driver) => {
-      const availability = driver.status || (driver.currentOrders ? "busy" : "available");
-      return [driver.name, driver.email, driver.phone, availability]
+      const rideStatus = getDriverRideStatus(driver);
+      const onlineStatus = getDriverOnlineStatus(driver);
+      return [driver.name, driver.email, driver.phone, rideStatus, onlineStatus]
         .filter(Boolean)
         .some((value) => value!.toLowerCase().includes(normalizedSearch));
     });
   }, [drivers, normalizedSearch]);
   const totalPages = Math.max(1, Math.ceil(filteredDrivers.length / DRIVER_PICKER_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
+  const selectedDriverIsAvailable = drivers.some(
+    (driver) =>
+      driver._id === selectedDriverId &&
+      getDriverRideStatus(driver) === "available",
+  );
   const paginatedDrivers = filteredDrivers.slice(
     (currentPage - 1) * DRIVER_PICKER_PAGE_SIZE,
     currentPage * DRIVER_PICKER_PAGE_SIZE,
@@ -521,6 +641,11 @@ export function AssignDriverModal({
             <X className="size-6" />
           </button>
         </div>
+        {warning ? (
+          <div className="mx-6 mb-4 rounded-[10px] border border-[#f5c26b] bg-[#fff8ec] px-4 py-3 text-[13px] text-[#8a5a00]">
+            {warning}
+          </div>
+        ) : null}
         <div className="px-6 pb-6">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative w-full sm:max-w-[360px]">
@@ -537,7 +662,7 @@ export function AssignDriverModal({
             </div>
             <Button
               className="h-10 rounded-[10px] bg-[#6d98c0] px-5 text-[15px] hover:bg-[#5f88ae]"
-              disabled={!selectedDriverId || assigning || !onAssignDriver}
+              disabled={!selectedDriverIsAvailable || assigning || !onAssignDriver}
               onClick={onAssignDriver}
               type="button"
             >
@@ -552,15 +677,18 @@ export function AssignDriverModal({
               <p className="py-8 text-center text-[14px] text-[#667085]">No drivers match your search.</p>
             ) : null}
             {!loading
-              ? paginatedDrivers.map((driver) => (
-                  <DriverCard
-                    key={driver._id}
-                    compact
-                    driver={driver}
-                    onAssign={onSelectDriver ? () => onSelectDriver(driver._id) : undefined}
-                    selected={selectedDriverId === driver._id}
-                  />
-                ))
+              ? paginatedDrivers.map((driver) => {
+                  const canAssign = getDriverRideStatus(driver) === "available";
+                  return (
+                    <DriverCard
+                      key={driver._id}
+                      compact
+                      driver={driver}
+                      onAssign={canAssign && onSelectDriver ? () => onSelectDriver(driver._id) : undefined}
+                      selected={selectedDriverId === driver._id}
+                    />
+                  );
+                })
               : null}
           </div>
           {!loading && filteredDrivers.length > 0 ? (

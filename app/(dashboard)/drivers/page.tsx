@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { AdminMetricCard, AdminPageFrame, DriverCard, RequestCard } from "@/components/admin/primitives";
+import { AdminMetricCard, AdminPageFrame, DriverCard, RequestCard, type DriverRow } from "@/components/admin/primitives";
 import { AdminSectionCard } from "@/components/admin/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getAdminOverview, getDriverRequests } from "@/lib/api";
+import { getAdminOverview, getDriverRequests, getDrivers } from "@/lib/api";
 
 type DriverRequestRow = {
   _id: string;
@@ -50,13 +50,20 @@ export default function DriversManagementPage() {
     queryKey: ["admin-driver-requests", "management"],
     queryFn: () => getDriverRequests({ page: 1, limit: 100 }),
   });
+  const driversQuery = useQuery({
+    queryKey: ["admin-drivers"],
+    queryFn: getDrivers,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
+  });
 
   const overview = overviewQuery.data as Overview | undefined;
+  const drivers = (driversQuery.data as DriverRow[] | undefined) || [];
   const requests = ((requestsQuery.data as { requests: DriverRequestRow[] } | undefined)?.requests || []).filter(
     (row) => row.status === "pending" || row.status === "accepted",
   );
 
-  if (overviewQuery.isLoading || requestsQuery.isLoading) {
+  if (overviewQuery.isLoading || requestsQuery.isLoading || driversQuery.isLoading) {
     return (
       <AdminPageFrame title="Driver Management" subtitle="See Driver Management">
         <div className="grid gap-4 lg:grid-cols-3">
@@ -68,10 +75,6 @@ export default function DriversManagementPage() {
       </AdminPageFrame>
     );
   }
-
-  const requestLabel = selectedRequestId
-    ? requests.find((row) => row._id === selectedRequestId)?.orderId?.orderId || "OI027"
-    : "OI027";
 
   return (
     <AdminPageFrame title="Driver Management" subtitle="See Driver Management">
@@ -93,14 +96,10 @@ export default function DriversManagementPage() {
         </div>
 
         <div className="space-y-4">
-          {(overview?.recentDrivers || []).map((driver, index) => (
+          {drivers.map((driver) => (
             <DriverCard
               key={driver._id}
-              driver={{
-                ...driver,
-                status: index % 3 === 1 ? "busy" : "available",
-                currentOrders: index % 3 === 1 ? 2 : 0,
-              }}
+              driver={driver}
               onView={() => router.push(`/drivers/${driver._id}`)}
               onAssign={() => setSelectedRequestId(requests[0]?._id || null)}
             />
