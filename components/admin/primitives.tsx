@@ -559,6 +559,16 @@ export function DriverCard({
             ) : null}
           </div>
         </div>
+        {onAssign ? (
+          selected ? (
+            <CheckCircle2 className="size-6 shrink-0 text-[#3d7eb8]" aria-label="Selected driver" />
+          ) : (
+            <span
+              className="size-6 shrink-0 rounded-full border-2 border-[#aebccc]"
+              aria-label="Select driver"
+            />
+          )
+        ) : null}
       </div>
     </Card>
   );
@@ -608,7 +618,7 @@ export function AssignDriverModal({
   const selectedDriverIsAvailable = drivers.some(
     (driver) =>
       driver._id === selectedDriverId &&
-      getDriverAvailability(driver) === "available",
+      getDriverRideStatus(driver) === "available",
   );
   const paginatedDrivers = filteredDrivers.slice(
     (currentPage - 1) * DRIVER_PICKER_PAGE_SIZE,
@@ -668,7 +678,7 @@ export function AssignDriverModal({
             ) : null}
             {!loading
               ? paginatedDrivers.map((driver) => {
-                  const canAssign = getDriverAvailability(driver) === "available";
+                  const canAssign = getDriverRideStatus(driver) === "available";
                   return (
                     <DriverCard
                       key={driver._id}

@@ -301,7 +301,7 @@ export default function AdminDashboardPage() {
           onSelectDriver={setSelectedDriverId}
           onAssignDriver={() => {
             if (!assigningRequestId || !selectedDriverId) {
-              toast.error("Select an available, online driver first.");
+              toast.error("Select an available driver first.");
               return;
             }
 
