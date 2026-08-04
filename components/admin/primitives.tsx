@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  Bike,
   CheckCircle2,
   ChevronLeft,
   Clock3,
@@ -74,6 +73,9 @@ export type DriverRow = {
   onlineStatus?: "online" | "offline";
   isOnline?: boolean;
   vehicle?: string;
+  vehicleType?: string;
+  vehiclePlateNumber?: string;
+  driverId?: string;
   completedDeliveries?: number;
   currentOrders?: number;
 };
@@ -206,7 +208,7 @@ export function AdminMetricCard({ label, value, accent = "blue", note }: AdminMe
       <p className="text-[16px] font-semibold text-[#212121]">{label}</p>
       <div className="mt-5 flex min-h-[64px] flex-col justify-between gap-4">
         <p className="text-[16px] font-medium">{value}</p>
-        
+        {note ? <p className="text-[13px] font-medium opacity-80">{note}</p> : null}
       </div>
     </Card>
   );

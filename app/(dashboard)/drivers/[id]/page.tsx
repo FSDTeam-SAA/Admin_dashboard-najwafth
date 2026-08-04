@@ -1,33 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import Image from "next/image";
+import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Bike } from "lucide-react";
 import {
   AdminBackHeader,
   AdminMetricCard,
   AdminSectionCard,
-  AssignDriverModal,
   RequestCard,
   SegmentedTabs,
   getDriverOnlineStatus,
   getDriverRideStatus,
   type DriverRow,
 } from "@/components/admin/primitives";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDriverRequestsByDriver, getDrivers } from "@/lib/api";
+import { getAssetUrl } from "@/lib/utils";
 
 type DriverRequestRow = {
   _id: string;
   status?: string;
   orderId?: {
+    address?: string;
+    createdAt?: string;
+    expectedDeliveryDate?: string;
+    items?: {
+      quantity?: number;
+    }[];
     orderId?: string;
     _id?: string;
+    phone?: string;
+    recipientName?: string;
+    status?: string;
+    totalAmount?: number;
   };
   shopId?: {
+    email?: string;
     name?: string;
   };
   customerName?: string;
+  customerPhone?: string;
+  customerLocation?: string;
+  shopName?: string;
+  shopPhone?: string;
+  shopLocation?: string;
   location?: string;
   item?: string;
   phone?: string;
@@ -37,10 +56,40 @@ type DriverRequestRow = {
   price?: number;
 };
 
+function formatVehicleLabel(value?: string) {
+  if (!value) {
+    return "N/A";
+  }
+
+  return value
+    .replace(/_/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isCompletedRequest(request: DriverRequestRow) {
+  return request.status === "completed" || request.orderId?.status === "delivered";
+}
+
+function isPendingDriverDelivery(request: DriverRequestRow) {
+  return request.status === "pending" || request.status === "accepted";
+}
+
+function getRequestItemCount(request: DriverRequestRow) {
+  if (request.item) {
+    return request.item;
+  }
+
+  const quantity = request.orderId?.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+  return `${quantity} ${quantity === 1 ? "item" : "items"}`;
+}
+
+const DRIVER_PROFILE_REQUESTS_PAGE_SIZE = 3;
+
 export default function DriverProfilePage() {
   const params = useParams<{ id: string }>();
   const [tab, setTab] = useState("all");
-  const [assignOpen, setAssignOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   const driversQuery = useQuery({
     queryKey: ["admin-drivers"],
@@ -54,24 +103,36 @@ export default function DriverProfilePage() {
     enabled: Boolean(params.id),
   });
 
-  const drivers = (driversQuery.data as DriverRow[] | undefined) || [];
+  const drivers = useMemo(() => (driversQuery.data as DriverRow[] | undefined) || [], [driversQuery.data]);
   const requestsData = requestsQuery.data as DriverRequestRow[] | undefined;
-  const requests = requestsData || [];
+  const requests = useMemo(() => requestsData || [], [requestsData]);
   const driver = drivers.find((row) => row._id === params.id);
   const rideStatus = driver ? getDriverRideStatus(driver) : "available";
   const onlineStatus = driver ? getDriverOnlineStatus(driver) : "offline";
+  const driverDisplayName = driver?.name || driver?.email?.split("@")[0] || "Driver";
+  const vehicleLabel = formatVehicleLabel(driver?.vehicleType || driver?.vehicle);
+  const avatarUrl = getAssetUrl(driver?.avatar);
+  const completedOrders = requests.filter(isCompletedRequest).length;
+  const pendingOrders = requests.filter(isPendingDriverDelivery).length;
+  const totalDeliveries = driver?.completedDeliveries ?? completedOrders;
 
-  const scopedRequests = (() => {
+  const scopedRequests = useMemo(() => {
     if (tab === "all") {
       return requests;
     }
 
     if (tab === "completed") {
-      return requests.filter((row) => row.status === "accepted");
+      return requests.filter(isCompletedRequest);
     }
 
-    return requests.filter((row) => row.status === tab);
-  })();
+    return requests.filter(isPendingDriverDelivery);
+  }, [requests, tab]);
+  const totalPages = Math.max(1, Math.ceil(scopedRequests.length / DRIVER_PROFILE_REQUESTS_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedRequests = scopedRequests.slice(
+    (currentPage - 1) * DRIVER_PROFILE_REQUESTS_PAGE_SIZE,
+    currentPage * DRIVER_PROFILE_REQUESTS_PAGE_SIZE,
+  );
 
   if (driversQuery.isLoading || requestsQuery.isLoading) {
     return (
@@ -89,11 +150,15 @@ export default function DriverProfilePage() {
       <AdminSectionCard>
         <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex gap-4">
-            <div className="flex size-[178px] items-center justify-center rounded-full bg-[#d6b08f] text-[52px] font-semibold text-white">
-              {driver?.name?.charAt(0) || "R"}
+            <div className="relative flex size-[178px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#d6b08f] text-[52px] font-semibold text-white">
+              {avatarUrl ? (
+                <Image src={avatarUrl} alt={driverDisplayName} fill sizes="178px" className="object-cover" />
+              ) : (
+                driverDisplayName.charAt(0).toUpperCase()
+              )}
             </div>
             <div>
-              <h2 className="text-[28px] font-semibold text-[#17223b]">{driver?.name || "Rahim Khan"}</h2>
+              <h2 className="text-[28px] font-semibold text-[#17223b]">{driverDisplayName}</h2>
               <div className="mt-2 flex items-center gap-5 text-[18px] capitalize">
                 <p className={rideStatus === "busy" ? "text-[#f97316]" : "text-[#16a34a]"}>
                   {rideStatus}
@@ -103,33 +168,34 @@ export default function DriverProfilePage() {
                 </p>
               </div>
               <p className="mt-4 text-[28px] font-medium text-[#202124]">
-                Vehicle: <span className="text-[#4090f7]">Bike</span>
+                Vehicle: <span className="text-[#4090f7]">{vehicleLabel}</span>
               </p>
               <p className="mt-2 text-[24px] text-[#202124]">
-                ID: <span className="text-[#4090f7]">12345678</span>
+                ID: <span className="text-[#4090f7]">{driver?.driverId || driver?._id || params.id}</span>
               </p>
               <div className="mt-5 space-y-3 text-[18px] text-[#667085]">
-                <p>{driver?.phone || "+880 1712-345678"}</p>
-                <p>234 deliveries</p>
+                <p>{driver?.phone || "Phone unavailable"}</p>
+                {driver?.vehiclePlateNumber ? <p>Plate: {driver.vehiclePlateNumber}</p> : null}
+                <p>{totalDeliveries} deliveries</p>
               </div>
             </div>
           </div>
-          <div className="flex h-[72px] w-[72px] flex-col items-center justify-center rounded-[10px] border border-[#3d8ef5] text-[#4090f7]">
-            <span className="text-[24px]">o</span>
-            <span className="text-[18px]">Bike</span>
+          <div className="flex min-h-[72px] w-[92px] flex-col items-center justify-center gap-1 rounded-[10px] border border-[#3d8ef5] px-2 text-center text-[#4090f7]">
+            <Bike className="size-6" />
+            <span className="text-[16px] leading-tight">{vehicleLabel}</span>
           </div>
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          <AdminMetricCard label="Total Driver" value="12,832" accent="blue" />
-          <AdminMetricCard label="Total Pending order" value="12,832" accent="cream" />
-          <AdminMetricCard label="Total Completed order" value="12,832" accent="green" />
+          <AdminMetricCard label="Total Orders" value={requests.length} accent="blue" />
+          <AdminMetricCard label="Pending Orders" value={pendingOrders} accent="cream" />
+          <AdminMetricCard label="Completed Orders" value={completedOrders} accent="green" />
         </div>
       </AdminSectionCard>
 
       <div className="mt-8">
-        <h3 className="text-[24px] font-semibold text-[#202124]">Orders from this Store</h3>
-        <p className="mt-1 text-[16px] text-[#777]">See Orders from this Store</p>
+        <h3 className="text-[24px] font-semibold text-[#202124]">Orders for this Driver</h3>
+        <p className="mt-1 text-[16px] text-[#777]">See orders assigned to this driver</p>
       </div>
 
       <div className="mt-4">
@@ -140,33 +206,51 @@ export default function DriverProfilePage() {
             { label: "Completed", value: "completed" },
           ]}
           value={tab}
-          onChange={setTab}
+          onChange={(value) => {
+            setTab(value);
+            setPage(1);
+          }}
         />
       </div>
 
       <div className="mt-6 space-y-5">
-        {scopedRequests.map((request) => (
+        {paginatedRequests.map((request) => (
           <RequestCard
             key={request._id}
             request={{
               ...request,
-              shopName: request.shopId?.name,
+              phone: request.shopPhone || "",
+              location: request.shopLocation || "",
+              shopName: request.shopName || request.shopId?.name || request.shopId?.email || "N/A",
+              shopPhone: request.shopPhone || "N/A",
+              shopLocation: request.shopLocation || "N/A",
+              customerName: request.customerName || request.orderId?.recipientName,
+              customerPhone: request.customerPhone || request.orderId?.phone || request.phone,
+              customerLocation: request.customerLocation || request.orderId?.address || request.location,
+              item: getRequestItemCount(request),
+              orderDate: request.orderDate || request.orderId?.createdAt || request.createdAt,
+              totalAmount: request.totalAmount ?? request.orderId?.totalAmount ?? request.price,
               orderId: request.orderId?.orderId || request.orderId?._id || request._id,
             }}
-            actionLabel="Assign Driver"
-            onAction={() => setAssignOpen(true)}
           />
         ))}
+        {scopedRequests.length === 0 ? (
+          <div className="rounded-[18px] border border-[#d2dce7] bg-[#f8fbff] px-6 py-10 text-center text-[15px] text-[#667085]">
+            No orders found for this driver.
+          </div>
+        ) : null}
       </div>
-
-      <AssignDriverModal
-        open={assignOpen}
-        title="Assign Driver to Order #OI027"
-        drivers={
-          drivers
-        }
-        onClose={() => setAssignOpen(false)}
-      />
+      <div className="mt-6 flex flex-col gap-3 rounded-[14px] border border-[#e2e8f0] bg-white text-[14px] text-[#5b6371] md:flex-row md:items-center md:justify-between md:pl-5">
+        <span className="px-5 pt-4 md:px-0 md:pt-0">
+          {scopedRequests.length > 0
+            ? `Showing ${(currentPage - 1) * DRIVER_PROFILE_REQUESTS_PAGE_SIZE + 1} to ${Math.min(
+                currentPage * DRIVER_PROFILE_REQUESTS_PAGE_SIZE,
+                scopedRequests.length,
+              )} of ${scopedRequests.length} orders`
+            : "Showing 0 orders"}
+        </span>
+        <Pagination page={currentPage} totalPages={totalPages} onPageChange={setPage} />
+      </div>
     </section>
   );
 }

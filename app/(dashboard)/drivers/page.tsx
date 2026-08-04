@@ -1,30 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { AdminMetricCard, AdminPageFrame, DriverCard, RequestCard, type DriverRow } from "@/components/admin/primitives";
+import { AdminMetricCard, AdminPageFrame, DriverCard, type DriverRow } from "@/components/admin/primitives";
 import { AdminSectionCard } from "@/components/admin/primitives";
+import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getAdminOverview, getDriverRequests, getDrivers } from "@/lib/api";
-
-type DriverRequestRow = {
-  _id: string;
-  status?: string;
-  orderId?: {
-    orderId?: string;
-    _id?: string;
-  };
-  shopName?: string;
-  phone?: string;
-  customerName?: string;
-  location?: string;
-  item?: string;
-  orderDate?: string;
-  createdAt?: string;
-  totalAmount?: number;
-  price?: number;
-};
 
 type Overview = {
   metrics: {
@@ -38,32 +21,45 @@ type Overview = {
   }[];
 };
 
+type DriverRequestsSummary = {
+  total?: number;
+  metrics?: {
+    totalPending?: number;
+  };
+};
+
+const DRIVERS_PAGE_SIZE = 5;
+
 export default function DriversManagementPage() {
   const router = useRouter();
-  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
 
   const overviewQuery = useQuery({
     queryKey: ["admin-overview"],
     queryFn: getAdminOverview,
   });
-  const requestsQuery = useQuery({
-    queryKey: ["admin-driver-requests", "management"],
-    queryFn: () => getDriverRequests({ page: 1, limit: 100 }),
+  const pendingRequestsQuery = useQuery({
+    queryKey: ["admin-driver-requests", "management-pending-count"],
+    queryFn: () => getDriverRequests({ page: 1, limit: 1, status: "pending" }),
   });
   const driversQuery = useQuery({
     queryKey: ["admin-drivers"],
     queryFn: getDrivers,
     refetchInterval: 5_000,
-    refetchOnWindowFocus: true,
   });
 
   const overview = overviewQuery.data as Overview | undefined;
-  const drivers = (driversQuery.data as DriverRow[] | undefined) || [];
-  const requests = ((requestsQuery.data as { requests: DriverRequestRow[] } | undefined)?.requests || []).filter(
-    (row) => row.status === "pending" || row.status === "accepted",
+  const drivers = useMemo(() => (driversQuery.data as DriverRow[] | undefined) || [], [driversQuery.data]);
+  const pendingRequestsData = pendingRequestsQuery.data as DriverRequestsSummary | undefined;
+  const totalPendingOrders = pendingRequestsData?.metrics?.totalPending ?? pendingRequestsData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(drivers.length / DRIVERS_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedDrivers = drivers.slice(
+    (currentPage - 1) * DRIVERS_PAGE_SIZE,
+    currentPage * DRIVERS_PAGE_SIZE,
   );
 
-  if (overviewQuery.isLoading || requestsQuery.isLoading || driversQuery.isLoading) {
+  if (overviewQuery.isLoading || pendingRequestsQuery.isLoading || driversQuery.isLoading) {
     return (
       <AdminPageFrame title="Driver Management" subtitle="See Driver Management">
         <div className="grid gap-4 lg:grid-cols-3">
@@ -82,7 +78,7 @@ export default function DriversManagementPage() {
         <AdminMetricCard label="Total Driver" value={overview?.metrics.totalDrivers || 0} accent="blue" />
         <AdminMetricCard
           label="Total Pending order"
-          value={requests.filter((request) => request.status === "pending").length}
+          value={totalPendingOrders}
           accent="cream"
         />
         <AdminMetricCard label="Total Completed order" value={overview?.metrics.totalCompleted || 0} accent="green" />
@@ -96,30 +92,32 @@ export default function DriversManagementPage() {
         </div>
 
         <div className="space-y-4">
-          {drivers.map((driver) => (
+          {paginatedDrivers.map((driver) => (
             <DriverCard
               key={driver._id}
               driver={driver}
               onView={() => router.push(`/drivers/${driver._id}`)}
-              onAssign={() => setSelectedRequestId(requests[0]?._id || null)}
             />
           ))}
+          {drivers.length === 0 ? (
+            <div className="rounded-[18px] border border-[#d2dce7] bg-[#f8fbff] px-5 py-10 text-center text-[15px] text-[#667085]">
+              No drivers found.
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3 rounded-[14px] border border-[#e2e8f0] bg-white text-[14px] text-[#5b6371] md:flex-row md:items-center md:justify-between md:pl-5">
+          <span className="px-5 pt-4 md:px-0 md:pt-0">
+            {drivers.length > 0
+              ? `Showing ${(currentPage - 1) * DRIVERS_PAGE_SIZE + 1} to ${Math.min(
+                  currentPage * DRIVERS_PAGE_SIZE,
+                  drivers.length,
+                )} of ${drivers.length} drivers`
+              : "Showing 0 drivers"}
+          </span>
+          <Pagination page={currentPage} totalPages={totalPages} onPageChange={setPage} />
         </div>
       </AdminSectionCard>
-
-      {selectedRequestId ? (
-        <div className="mt-6 space-y-5">
-          {requests.slice(0, 2).map((request) => (
-            <RequestCard
-              key={request._id}
-              request={{
-                ...request,
-                orderId: request.orderId?.orderId || request.orderId?._id || request._id,
-              }}
-            />
-          ))}
-        </div>
-      ) : null}
     </AdminPageFrame>
   );
 }

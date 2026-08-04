@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AdminMetricCard,
   AdminPageFrame,
@@ -73,8 +73,8 @@ export default function DriverRequestsPage() {
   const requestsQuery = useQuery({
     queryKey: ["admin-driver-requests", "screen", page, statusFilter],
     queryFn: () => getDriverRequests({ page, limit: DRIVER_REQUESTS_PAGE_SIZE, status: statusFilter }),
+    placeholderData: keepPreviousData,
     refetchInterval: 2_000,
-    refetchOnWindowFocus: true,
   });
   const driversQuery = useQuery({
     queryKey: ["admin-drivers"],
@@ -107,7 +107,7 @@ export default function DriverRequestsPage() {
   const totalPages = requestsData?.totalPages || 1;
   const pageTotal = requestsData?.total || requests.length;
 
-  if (requestsQuery.isLoading) {
+  if (requestsQuery.isLoading && !requestsData) {
     return (
       <AdminPageFrame title="For Driver Requests" subtitle="See Orders from this Store">
         <div className="grid gap-4 lg:grid-cols-3">
