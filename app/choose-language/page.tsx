@@ -1,17 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/lib/i18n";
 
 const languages = [
   { id: "en", name: "English", label: "United Kingdom", flag: "GB" },
-  { id: "fr", name: "France", label: "France", flag: "FR" },
+  { id: "fr", name: "French", label: "France", flag: "FR" },
 ];
 
 export default function ChooseLanguagePage() {
   const router = useRouter();
-  const [selected, setSelected] = useState("en");
+  const { language: selected, setLanguage } = useLanguage();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#fcf1e2] px-4">
@@ -22,7 +22,7 @@ export default function ChooseLanguagePage() {
             <button
               key={language.id}
               className="flex w-full items-center justify-between rounded-[10px] border border-[#b6b6b6] bg-white px-4 py-4"
-              onClick={() => setSelected(language.id)}
+              onClick={() => setLanguage(language.id as "fr" | "en")}
               type="button"
             >
               <div className="flex items-center gap-4">
@@ -43,7 +43,6 @@ export default function ChooseLanguagePage() {
         <Button
           className="mx-auto mt-6 flex h-[48px] w-full max-w-[344px] rounded-[10px] bg-[#6d98c0] text-[18px] hover:bg-[#5f88ae]"
           onClick={() => {
-            localStorage.setItem("preferred-language", selected);
             router.push("/auth/signin");
           }}
           type="button"
