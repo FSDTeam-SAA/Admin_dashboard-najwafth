@@ -6,9 +6,10 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
+  const locale = typeof document !== "undefined" && document.documentElement.lang === "en" ? "en-IE" : "fr-FR";
+  return new Intl.NumberFormat(locale, {
     style: "currency",
-    currency: "USD",
+    currency: "EUR",
     maximumFractionDigits: 2,
   }).format(value || 0);
 }
@@ -18,7 +19,8 @@ export function formatDate(value?: string | Date) {
     return "N/A";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
+  const locale = typeof document !== "undefined" && document.documentElement.lang === "en" ? "en-GB" : "fr-FR";
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",

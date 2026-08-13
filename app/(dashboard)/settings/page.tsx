@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DollarSign, Eye, EyeOff, Truck, X } from "lucide-react";
+import { Euro, Eye, EyeOff, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { AdminPageFrame, AdminSectionCard, ProfileHero } from "@/components/admin/primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { changePassword, getAdminSettings, getProfile, updateAdminSettings, updateProfile } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
+import { LanguageSelector } from "@/lib/i18n";
 
 type ProfileData = {
   name?: string;
@@ -122,6 +123,13 @@ export default function SettingsPage() {
 
   return (
     <AdminPageFrame title="Setting" subtitle="Mange your Profile Information">
+      <AdminSectionCard className="mb-6">
+        <h2 className="text-[20px] font-semibold text-[#202124]">Language</h2>
+        <p className="mt-1 text-[14px] text-[#667085]">Choose the language used throughout the admin dashboard.</p>
+        <div className="mt-4 max-w-[360px]">
+          <LanguageSelector />
+        </div>
+      </AdminSectionCard>
       <div className="grid gap-5 xl:grid-cols-4">
         <button
           className={`h-[62px] rounded-[10px] border text-[24px] font-medium ${
@@ -326,7 +334,7 @@ export default function SettingsPage() {
               <div>
                 <label className="mb-3 block text-[16px] font-medium text-[#202124]">Commission Percentage</label>
                 <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#667085]" />
+                  <Euro className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#667085]" />
                   <Input
                     className="h-[54px] rounded-[10px] border-[#cfd4dc] pl-12 pr-12"
                     max="100"
@@ -379,7 +387,7 @@ export default function SettingsPage() {
               <div>
                 <label className="mb-3 block text-[16px] font-medium text-[#202124]">Delivery Fee</label>
                 <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#667085]" />
+                  <Euro className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#667085]" />
                   <Input
                     className="h-[54px] rounded-[10px] border-[#cfd4dc] pl-12"
                     min="0"
